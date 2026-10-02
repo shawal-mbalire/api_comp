@@ -1,0 +1,30 @@
+# Copy to terraform.tfvars and fill in. Alternatively just `export
+# DIGITALOCEAN_TOKEN=...` and override only what differs from variables.tf.
+#
+# NOTE: terraform.tfvars is gitignored — never commit tokens.
+do_token        = "dop_v1_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+
+region          = "sfo3"
+api_size        = "s-2vcpu-2gb"   # API droplet: Traefik + Postgres + ONE stack
+k6_size         = "s-2vcpu-2gb"   # k6 droplet: load generator only
+
+# DigitalOcean SSH key NAME(s) already in your account — installed on BOTH
+# droplets. The matching local private key must exist at ssh_private_key.
+ssh_key_names   = ["your-do-key-name"]
+ssh_private_key = "~/.ssh/id_ed25519"
+
+# Repository cloned onto both droplets (push your branch first if it is
+# private, or grant the droplet a deploy key).
+repo_url        = "https://github.com/shawal-mbalire/api_comp.git"
+repo_ref        = "main"
+
+# Which SINGLE API the API droplet runs. Swap per benchmark run:
+#   terraform apply -var stack=go     (exactly one API live at a time)
+stack           = "rust"
+
+# Seed Postgres on first deploy; set false afterwards to reuse the dataset
+# (it lives in the pgdata volume and survives stack swaps).
+seed            = true
+
+# k6 release tag installed on the k6 droplet.
+k6_version      = "v0.56.0"

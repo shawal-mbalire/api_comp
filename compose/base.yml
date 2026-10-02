@@ -1,0 +1,62 @@
+# Shared infrastructure — Traefik (the ONLY proxy) + Postgres (pure database).
+#
+# Pair this file with ONE OR MORE per-stack compose files to select which APIs
+# run; the project is always named `api-comp`, so Traefik discovery and the
+# shared Postgres volume work identically in both invocation styles:
+#
+#   docker compose -f compose/base.yml -f compose/rust.yml up -d --build   # one API
+#   docker compose -f compose/base.yml -f compose/go.yml -f compose/java.yml up -d --build
+#   docker compose up -d --build   # everything (root docker-compose.yml includes this file)
+#
+# Each <stack>.yml in this directory defines exactly ONE API service with its
+# Traefik router labels; nothing else. Build contexts are relative to the
+# compose file, so they work from any cwd.
+name: api-comp
+
+services:
+  # ── edge proxy: owns all networking/routing (inline config) ───────────────
+  traefik:
+    image: traefik:latest
+    restart: unless-stopped
+    command:
+      - --providers.docker=true
+      - --providers.docker.exposedbydefault=false
+      - --entrypoints.web.address=:80
+      - --api.dashboard=true
+      - --api.insecure=true            # dashboard on :8080 (local benchmarking only)
+      - --certificatesresolvers.letsencrypt.acme.email=admin@example.com
+      - --certificatesresolvers.letsencrypt.acme.storage=/acme.json
+      - --certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web
+    ports:
+      - "80:80"
+      - "8080:8080"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./infra/acme.json:/acme.json
+    labels:
+      traefik.enable: "true"
+      traefik.http.routers.dashboard.rule: "Host(`traefik.localhost`)"
+      traefik.http.routers.dashboard.service: "api@internal"
+      traefik.http.routers.dashboard.entrypoints: "web"
+
+  # ── database: pure Postgres, nothing more — schema auto-applied on fresh volumes
+  db:
+    image: postgres:latest
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: app
+      POSTGRES_PASSWORD: app
+      POSTGRES_DB: app
+    volumes:
+      # Postgres 18+ requires the mount at the parent dir (data lands in a
+      # version-specific subdir, keeping pg_upgrade compatible).
+      - pgdata:/var/lib/postgresql
+      - ./infra/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U app -d app"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+volumes:
+  pgdata:

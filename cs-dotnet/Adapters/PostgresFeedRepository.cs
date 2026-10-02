@@ -4,7 +4,7 @@ using Npgsql;
 namespace Apicomp.Adapters;
 
 // ─── Driven adapter: PostgreSQL FeedRepository. Owns the raw SQL (verbatim from
-//     docs/../infra/api-contract.md) and maps rows → domain models. The only file that
+//     infra/api-contract.md) and maps rows → domain models. The only file that
 //     touches Npgsql (besides the composition root handing it a data source). ─
 
 /// <summary>PostgreSQL implementation of <see cref="IFeedRepository"/>.
@@ -111,6 +111,7 @@ public sealed class PostgresFeedRepository : IFeedRepository
         await using var conn = await _dataSource.OpenConnectionAsync(ct);
 
         long newId;
+        DateTime postedAtUtc;
         await using (var cmd = new NpgsqlCommand(CreatePostSql, conn)
         {
             Parameters = { new() { Value = userId }, new() { Value = content } }
@@ -118,8 +119,11 @@ public sealed class PostgresFeedRepository : IFeedRepository
         {
             try
             {
-                var result = await cmd.ExecuteScalarAsync(ct); // RETURNING id, posted_at → id
-                newId = result is null ? 0L : (long)result;
+                // RETURNING id, posted_at — read both columns in the one round trip.
+                await using var r = await cmd.ExecuteReaderAsync(ct);
+                await r.ReadAsync(ct);
+                newId = r.GetInt64(0);
+                postedAtUtc = DateTime.SpecifyKind(r.GetDateTime(1), DateTimeKind.Utc);
             }
             catch (PostgresException ex) when (ex.SqlState == "23503") // FK: user does not exist
             {
@@ -127,9 +131,14 @@ public sealed class PostgresFeedRepository : IFeedRepository
             }
         }
 
-        // Read back the full created post (author snapshot + like count = 0).
-        var created = await FindPostByIdAsync(newId, ct);
-        return created ?? throw new NotFoundException("not found");
+        // Author snapshot: one lookup, same as every other stack (the FK on
+        // posts.user_id guarantees the acting user exists; the check keeps the
+        // 404-parity race safe).
+        var author = await FindByUserIdAsync(userId, ct);
+        if (author is null)
+            throw new NotFoundException("not found");
+
+        return new Post(newId, userId, author.Username, author.DisplayName, content, postedAtUtc, 0);
     }
 
     /// <summary>Maps one post row to the contract's domain Post model. posted_at is

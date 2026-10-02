@@ -96,7 +96,7 @@ public static class ApiEndpoints
             try
             {
                 var created = await service.CreatePostAsync(userId, body?.Content, ct);
-                return Results.Created($"/api/posts/{created.Id}", ToPostDto(created)); // 201
+                return Results.Json(ToPostDto(created), statusCode: 201); // wire parity: no Location header
             }
             catch (Exception e)
             {
@@ -128,20 +128,28 @@ public static class ApiEndpoints
         p.LikeCount);
 
     /// <summary>Benchmark simplification: `Authorization: Bearer <user_id>` — the bearer
-    /// token IS the numeric acting user id. Missing/malformed → 401 at this boundary.</summary>
-    private static bool TryGetUserId(HttpContext ctx, out long userId)
+    /// token IS the numeric acting user id. Missing/malformed → 401 at this boundary.
+    /// See <see cref="TryParseBearer"/> for the strict rule.</summary>
+    private static bool TryGetUserId(HttpContext ctx, out long userId) =>
+        TryParseBearer(ctx.Request.Headers.Authorization.ToString(), out userId);
+
+    /// <summary>Strict bearer parser shared with the unit tests (Apicomp.Tests):
+    /// exactly {@code Bearer } followed by a bare positive integer. Case-sensitive
+    /// scheme, digits only — no surrounding whitespace, no signs, no floats/hex/
+    /// exponents ("0", "7.0", "1e3", "0x10", "+7", " 7", "7 " are all malformed).</summary>
+    public static bool TryParseBearer(string header, out long userId)
     {
         userId = 0;
-        var header = ctx.Request.Headers.Authorization.ToString().Trim();
         if (string.IsNullOrEmpty(header))
             return false;
 
         const string prefix = "Bearer ";
-        if (!header.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+        if (!header.StartsWith(prefix, StringComparison.Ordinal))
             return false;
 
-        var token = header[prefix.Length..].Trim();
-        return long.TryParse(token, out userId) && userId > 0;
+        var token = header[prefix.Length..];
+        return long.TryParse(token, NumberStyles.None, CultureInfo.InvariantCulture, out userId)
+            && userId > 0;
     }
 
     // Wire DTOs — serialized with the framework's camelCase policy.

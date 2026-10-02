@@ -100,7 +100,7 @@ def binary_search(base_url, lo, hi, tag_prefix):
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--stack", required=True, help="Stack name (go, rust, node, ...)")
-    ap.add_argument("--base-url", default=os.environ.get("BASE_URL", "http://localhost"), help="Nginx edge URL")
+    ap.add_argument("--base-url", default=os.environ.get("BASE_URL", "http://localhost"), help="Traefik edge URL")
     ap.add_argument("--initial", type=int, default=2500, help="Starting user count (default 2500)")
     ap.add_argument("--max-users", type=int, default=32000, help="Upper bound for doubling")
     ap.add_argument("--min-users", type=int, default=125)

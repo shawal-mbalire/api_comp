@@ -1,0 +1,11 @@
+#cloud-config
+# API droplet bootstrap — the docker-24-04 image already ships Docker Engine
+# and the Compose plugin; we add git + python for infra/do_deploy.py, seed.py.
+package_update: true
+packages:
+  - git
+  - python3
+  - curl
+  - ca-certificates
+runcmd:
+  - systemctl enable --now docker

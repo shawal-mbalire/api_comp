@@ -1,0 +1,20 @@
+set shell := ["bash", "-euo", "pipefail", "-c"]
+
+root := justfile_directory()
+
+default:
+    @just --list
+
+install:
+    @bun install
+
+# Strict typecheck only — no emit (Bun runs .ts natively).
+typecheck:
+    @npx tsc --noEmit
+
+# bun:test unit tests (fake repository; Hono app.request — no sockets, no DB).
+test:
+    @bun test tests/
+
+start:
+    @bun run main.ts

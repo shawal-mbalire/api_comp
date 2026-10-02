@@ -1,0 +1,27 @@
+# Node (Express 5, TypeScript, type-stripped by Node 24+) — one API service.
+# Combine with compose/base.yml:
+#   docker compose -f compose/base.yml -f compose/node.yml up -d --build
+services:
+  node:
+    build:
+      context: ../ts-express
+      dockerfile_inline: |
+        FROM node:24-slim
+        WORKDIR /app
+        COPY package*.json ./
+        RUN npm install --omit=dev
+        COPY . .
+        EXPOSE 3000
+        CMD ["node", "main.ts"]
+    restart: unless-stopped
+    environment: { PORT: 3000, DATABASE_URL: postgres://app:app@db:5432/app, POOL_SIZE: "10" }
+    depends_on:
+      db:
+        condition: service_healthy
+    labels:
+      traefik.enable: "true"
+      traefik.http.routers.node.rule: "PathPrefix(`/node`)"
+      traefik.http.routers.node.entrypoints: "web"
+      traefik.http.routers.node.middlewares: "node-strip"
+      traefik.http.middlewares.node-strip.stripprefix.prefixes: "/node"
+      traefik.http.services.node.loadbalancer.server.port: "3000"

@@ -33,7 +33,7 @@ impl AppState {
     }
 }
 
-// ── HTTP DTOs (exact camelCase JSON from docs/../infra/api-contract.md) ─────────────────
+// ── HTTP DTOs (exact camelCase JSON from infra/api-contract.md) ─────────────────
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -99,12 +99,11 @@ fn unauthorized() -> Response {
     error_response(StatusCode::UNAUTHORIZED, "unauthorized")
 }
 
-/// Map a domain error to an HTTP response. The `FeedError` message is carried
-/// through so each 400/404 keeps its exact historical body (e.g. the `404`
-/// `"not found"` and the missing-content `400` `"content required"`).
+/// Map a domain error to an HTTP response. All 400s render `{"error":"bad request"}`
+/// and all 404s `{"error":"not found"}` — identical bodies across every stack.
 fn map_domain_error(err: FeedError) -> Response {
     match err {
-        FeedError::BadRequest(msg) => error_response(StatusCode::BAD_REQUEST, &msg),
+        FeedError::BadRequest(_) => error_response(StatusCode::BAD_REQUEST, "bad request"),
         FeedError::NotFound(msg) => error_response(StatusCode::NOT_FOUND, &msg),
         FeedError::Database(_) => {
             error_response(StatusCode::INTERNAL_SERVER_ERROR, "internal error")
@@ -131,12 +130,44 @@ impl FromRequestParts<AppState> for ActingUser {
             .get(header::AUTHORIZATION)
             .and_then(|v| v.to_str().ok())
             .ok_or_else(unauthorized)?;
-        let token = value.strip_prefix("Bearer ").ok_or_else(unauthorized)?;
-        let id: i64 = token.trim().parse().map_err(|_| unauthorized())?;
-        if id <= 0 {
-            return Err(unauthorized());
-        }
+        let id = parse_acting_user(value).ok_or_else(unauthorized)?;
         Ok(ActingUser(id))
+    }
+}
+
+/// Parse the `Authorization` header value into the acting user id.
+///
+/// Strict parity with every other stack: exactly `Bearer ` followed by a bare
+/// positive integer (`[0-9]+`). `0`, floats, hex, exponents, signs (`+7`) and
+/// surrounding whitespace are all malformed → `None` (401 at the boundary).
+fn parse_acting_user(value: &str) -> Option<i64> {
+    let token = value.strip_prefix("Bearer ")?;
+    if token.is_empty() || !token.bytes().all(|b| b.is_ascii_digit()) {
+        return None;
+    }
+    let id: i64 = token.parse().ok()?;
+    (id > 0).then_some(id)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::parse_acting_user;
+
+    /// The strict bearer rule enforced by every stack: `Bearer <positive int>`.
+    #[test]
+    fn bearer_accepts_bare_positive_integer() {
+        assert_eq!(parse_acting_user("Bearer 7"), Some(7));
+        assert_eq!(parse_acting_user("Bearer 007"), Some(7)); // leading zeros ok
+    }
+
+    #[test]
+    fn bearer_rejects_malformed_tokens() {
+        for bad in [
+            "Bearer", "Bearer ", "Bearer 0", "Bearer -3", "Bearer 7.0", "Bearer 1e3",
+            "Bearer 0x10", "Bearer +7", "Bearer 7 ", "Bearer  7", "bearer 7", "BEARER 7",
+        ] {
+            assert_eq!(parse_acting_user(bad), None, "should reject: {bad:?}");
+        }
     }
 }
 

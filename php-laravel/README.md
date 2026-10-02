@@ -19,7 +19,7 @@ Traefik (:80, /php rule + stripPrefix) ──►  FrankenPHP (HTTP :9000)
 - **OPcache** (JIT, `validate_timestamps=0`) and **route config cache** are baked
   into the image at build time.
 - Classic mode boots the framework per request — behaviorally comparable to the
-  video's PHP-FPM baseline (that's where the "framework boot cost" finding comes
+  video's PHP baseline (that's where the "framework boot cost" finding comes
   from). Worker mode (Octane-style) is a one-line Caddyfile change.
 - **No Eloquent, no ORM objects, no external cache** — raw SQL through the `DB`
   facade (PDO) using the exact contract queries.
@@ -28,7 +28,7 @@ Traefik (:80, /php rule + stripPrefix) ──►  FrankenPHP (HTTP :9000)
 
 ```
 php-laravel/
-├── routes/                       # web.php (/health) + api.php (framework glue)
+├── routes/                       # web.php (/health) + api.php (glue) + console.php
 ├── bootstrap/app.php             # withRouting(web:, api:, ...)
 ├── app/
 │   ├── Domain/                    # pure application logic (no Laravel/DB imports)
@@ -58,6 +58,17 @@ docker compose up -d --build        # every stack (incl. php) starts inline-buil
 # Traefik routes /php → php:9000 (prefix stripped; app sees /api/...)
 curl -i -H "Authorization: Bearer 7" http://localhost/php/api/feed
 ```
+
+## Build model (scaffold overlay)
+
+The php image is built from a stock `composer create-project laravel/laravel:^13.0`
+scaffold **overlaid** with this repo's files (`composer.json`,
+`bootstrap/app.php`, `routes/`, `app/` — see the `php` service's
+`dockerfile_inline` in `docker-compose.yml`). The framework parts this repo
+doesn't track (`config/`, `public/index.php`, writable `storage/` dirs) come
+from the scaffold at build time. `routes/console.php` **is** tracked here so
+the folder is self-contained and boot behavior never depends on scaffold
+leftovers.
 
 ## Tests
 

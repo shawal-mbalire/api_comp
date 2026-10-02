@@ -1,0 +1,30 @@
+# Java (Spring Boot) — one API service. Combine with compose/base.yml:
+#   docker compose -f compose/base.yml -f compose/java.yml up -d --build
+services:
+  java:
+    build:
+      context: ../java-spring
+      dockerfile_inline: |
+        FROM maven:3.9-eclipse-temurin-25 AS builder
+        WORKDIR /app
+        COPY pom.xml .
+        COPY src ./src
+        RUN mvn -q -DskipTests package
+        FROM eclipse-temurin:25-jre
+        WORKDIR /app
+        COPY --from=builder /app/target/*.jar app.jar
+        ENV PORT=8080
+        EXPOSE 8080
+        ENTRYPOINT ["java", "-jar", "app.jar"]
+    restart: unless-stopped
+    environment: { PORT: 8080, DATABASE_URL: postgres://app:app@db:5432/app, POOL_SIZE: "10" }
+    depends_on:
+      db:
+        condition: service_healthy
+    labels:
+      traefik.enable: "true"
+      traefik.http.routers.java.rule: "PathPrefix(`/java`)"
+      traefik.http.routers.java.entrypoints: "web"
+      traefik.http.routers.java.middlewares: "java-strip"
+      traefik.http.middlewares.java-strip.stripprefix.prefixes: "/java"
+      traefik.http.services.java.loadbalancer.server.port: "8080"

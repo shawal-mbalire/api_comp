@@ -7,24 +7,31 @@ default:
     @just --list
 
 # ── lifecycle ────────────────────────────────────────────────────────────────
-# Launch EVERYTHING (Traefik + Postgres + all 8 stacks, images built inline).
-up:
-    @docker compose up -d --build
+# Launch EVERYTHING (Traefik + Postgres + all 8 stacks). Append stack names to
+# run a SUBSET instead — every stack is its own compose file under the same
+# `api-comp` project, so Traefik discovery and the shared Postgres volume just
+# work:
+#   just up                # everything
+#   just up rust go        # infra + rust + go
+#   just build php         # build one stack only
+#   just down rust         # stop infra + rust (pgdata volume persists)
+up *stacks:
+    @python3 infra/compose.py up -d --build {{stacks}}
 
-build:
-    @docker compose build
+build *stacks:
+    @python3 infra/compose.py build {{stacks}}
 
-down:
-    @docker compose down
+down *stacks:
+    @python3 infra/compose.py down {{stacks}}
 
-stop:
-    @docker compose stop
+stop *stacks:
+    @python3 infra/compose.py stop {{stacks}}
 
-ps:
-    @docker compose ps
+ps *stacks:
+    @python3 infra/compose.py ps {{stacks}}
 
-logs:
-    @docker compose logs -f --tail=100
+logs *stacks:
+    @python3 infra/compose.py logs -f --tail=100 {{stacks}}
 
 # ── database ─────────────────────────────────────────────────────────────────
 seed:
@@ -67,9 +74,68 @@ bench stack:
 metrics:
     @ls -la infra/metrics 2>/dev/null || echo "no metrics yet — run: just bench <stack>"
 
+# ── digital ocean (terraform) ────────────────────────────────────────────────
+# Two droplets: apicomp-api runs ONE stack at a time (Traefik + Postgres +
+# one API) and apicomp-k6 runs k6 against the API droplet's public IP
+# (off-box traffic, exactly 2 droplets at any time). See terraform/README.md.
+# Raw terraform passthrough (cwd = terraform/):
+#   just tf init | plan | apply | destroy | output
+tf *args:
+    @cd {{root}}/terraform && terraform {{args}}
+
+# Swap the API droplet to <stack>, then run the 14-check smoke test + the full
+# binary-search benchmark from the k6 droplet, and pull the report back.
+bench-do stack:
+    @python3 {{root}}/infra/do_bench.py --stack {{stack}}
+
+# Run each of the 8 API setups exactly once against the same two droplets.
+bench-do-all:
+    #!/usr/bin/env python3
+    import os
+    import sys
+
+    sys.path.insert(0, os.path.join("{{root}}", "infra"))
+    from do_bench import main
+
+    failed = 0
+    for s in ["rust", "go", "java", "dotnet", "bun", "node", "fastapi", "php"]:
+        print(f"\n=== benchmark {s} ===")
+        code = main(["--stack", s])
+        failed += 1 if code else 0
+        print(f"{s}: {'PASS' if code == 0 else 'FAIL(' + str(code) + ')'}")
+    print(f"\nbench-do-all: {'all stacks PASS' if failed == 0 else str(failed) + ' FAILED'}")
+    raise SystemExit(1 if failed else 0)
+
+# ── per-stack router: just <stack> <recipe> ─────────────────────────────────
+# Every stack folder ships its own self-contained justfile (build/test/typecheck/
+# start/...). `just rust` lists it; `just rust test` runs cargo test in rust-axum/.
+rust recipe="default" *args:
+    @cd {{root}}/rust-axum && just {{recipe}} {{args}}
+
+go recipe="default" *args:
+    @cd {{root}}/go-gin && just {{recipe}} {{args}}
+
+java recipe="default" *args:
+    @cd {{root}}/java-spring && just {{recipe}} {{args}}
+
+dotnet recipe="default" *args:
+    @cd {{root}}/cs-dotnet && just {{recipe}} {{args}}
+
+bun recipe="default" *args:
+    @cd {{root}}/ts-hono && just {{recipe}} {{args}}
+
+node recipe="default" *args:
+    @cd {{root}}/ts-express && just {{recipe}} {{args}}
+
+fastapi recipe="default" *args:
+    @cd {{root}}/python-fastapi && just {{recipe}} {{args}}
+
+php recipe="default" *args:
+    @cd {{root}}/php-laravel && just {{recipe}} {{args}}
+
 # ── tests ────────────────────────────────────────────────────────────────────
-# Typecheck the TypeScript stacks (tsc --noEmit; no emit step — Node 24+
-# type-stripping and Bun run the .ts files natively).
+# Typecheck the TypeScript stacks via their own justfiles (tsc --noEmit; no emit
+# step — Node 24+ type-stripping and Bun run the .ts files natively).
 typecheck:
     #!/usr/bin/env python3
     import subprocess, sys
@@ -77,47 +143,41 @@ typecheck:
     stacks = ["ts-express", "ts-hono"]
     failed = 0
     for stack in stacks:
-        r = subprocess.run(["npx", "tsc", "--noEmit"], cwd=stack)
+        r = subprocess.run(["just", "-f", f"{stack}/justfile", "typecheck"])
         ok = r.returncode == 0
         print(f"{stack:16} {'ok' if ok else 'FAIL'}")
         failed += 0 if ok else 1
     print("typecheck: " + ("all stacks PASS" if failed == 0 else "FAILED"))
     raise SystemExit(1 if failed else 0)
 
-# Unit tests per stack (fake repositories, no DB). `just test` → all stacks.
+# Unit tests per stack through its own justfile (fake repositories, no DB).
+# `just test` → all stacks; `just test rust` → one stack.
 test stack="all":
     #!/usr/bin/env python3
     import subprocess, sys
     from concurrent.futures import ThreadPoolExecutor
 
     all_stacks = {
-        "node":    ("ts-express",        ["node", "--test", "tests/"]),
-        "bun":     ("ts-hono",           ["bun", "test", "tests/"]),
-        "go":      ("go-gin",            ["go", "test", "./..."]),
-        "rust":    ("rust-axum",         ["cargo", "test"]),
-        "java":    ("java-spring",       ["mvn", "-q", "test"]),
-        "fastapi": ("python-fastapi",    ["python3", "-m", "unittest", "tests.test_workflows"]),
-        "dotnet":  ("cs-dotnet",         ["dotnet", "test"]),
-        "php":     ("php-laravel",       None),  # needs dev deps (phpunit) in a full Laravel env
+        "node":    "ts-express",
+        "bun":     "ts-hono",
+        "go":      "go-gin",
+        "rust":    "rust-axum",
+        "java":    "java-spring",
+        "fastapi": "python-fastapi",
+        "dotnet":  "cs-dotnet",   # needs a .NET SDK on the host
+        "php":     "php-laravel", # child justfile SKIPs when vendor/phpunit is absent
     }
     requested = sys.argv[1] if len(sys.argv) > 1 else "all"
     targets = all_stacks if requested == "all" else {requested: all_stacks[requested]}
 
     def run(item):
-        name, (dir_, cmd) = item
-        if cmd is None:
-            return name, "SKIP"
-        p = subprocess.run(cmd, cwd=dir_)
+        name, dir_ = item
+        p = subprocess.run(["just", "-f", f"{dir_}/justfile", "test"])
         return name, p.returncode
 
     with ThreadPoolExecutor(max_workers=6) as pool:
         results = list(pool.map(run, targets.items()))
     for name, code in results:
-        if code == 0:
-            print(f"{name:10} ok")
-        elif code == "SKIP":
-            print(f"{name:10} SKIP")
-        else:
-            print(f"{name:10} FAIL({code})")
-    failed = [r for r in results if isinstance(r[1], int) and r[1] != 0]
+        print(f"{name:10} {'ok' if code == 0 else f'FAIL({code})'}")
+    failed = [r for r in results if r[1] != 0]
     raise SystemExit(1 if failed else 0)

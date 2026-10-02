@@ -1,0 +1,17 @@
+set shell := ["bash", "-euo", "pipefail", "-c"]
+
+root := justfile_directory()
+
+default:
+    @just --list
+
+# Package without running tests (the image build does exactly this).
+build:
+    @mvn -q -DskipTests package
+
+# Unit tests (domain workflows + adapter parser) — no Spring context, no DB.
+test:
+    @mvn -q test
+
+run:
+    @mvn -q spring-boot:run

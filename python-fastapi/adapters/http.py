@@ -61,7 +61,10 @@ def _parse_acting_user(authorization: str | None) -> int:
     if not authorization:
         raise ApiError(401, "unauthorized")
     scheme, sep, token = authorization.partition(" ")
-    if not sep or scheme.lower() != "bearer" or not token.isdigit():
+    # Strict parity: case-sensitive "Bearer " scheme, bare positive integer digits
+    # only — a lowercase scheme, floats, hex, exponents, signs or whitespace are
+    # all malformed → 401 (matches ts/go/rust; the other adapters agree).
+    if not sep or scheme != "Bearer" or not token.isdigit():
         raise ApiError(401, "unauthorized")
     user_id = int(token)
     if user_id <= 0:

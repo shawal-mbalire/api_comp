@@ -120,11 +120,15 @@ class ApiController
     /**
      * Benchmark auth: `Authorization: Bearer <user_id>` — the token IS the
      * acting user id. Returns null for missing/malformed headers.
+     *
+     * Strict parity with every other stack: case-sensitive `Bearer ` followed
+     * by a bare positive integer. A lowercase scheme, extra whitespace, floats,
+     * hex, exponents or signs are all malformed → null.
      */
     private function actingUserId(Request $request): ?int
     {
         $header = $request->header('Authorization', '');
-        if (preg_match('/^Bearer\s+([0-9]+)$/i', $header, $m) !== 1) {
+        if (preg_match('/^Bearer ([0-9]+)$/', $header, $m) !== 1) {
             return null;
         }
 

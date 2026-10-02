@@ -81,7 +81,7 @@ async fn main() {
         .await
         .expect("server error");
 
-    // LifetimePort: release the connection pool on the way out.
+    // Release the connection pool on the way out.
     pool.close().await;
     println!("connection pool closed");
 }

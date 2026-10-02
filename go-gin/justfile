@@ -1,0 +1,22 @@
+set shell := ["bash", "-euo", "pipefail", "-c"]
+
+root := justfile_directory()
+
+default:
+    @just --list
+
+build:
+    @go build ./...
+
+vet:
+    @go vet ./...
+
+# Unit tests (workflows + Gin httptest) — fake repository, no DB.
+test:
+    @go test ./...
+
+fmt-check:
+    @test -z "$$(gofmt -l .)" || (gofmt -l . && exit 1)
+
+run:
+    @go run .

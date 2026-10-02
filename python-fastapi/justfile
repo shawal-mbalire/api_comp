@@ -1,0 +1,21 @@
+set shell := ["bash", "-euo", "pipefail", "-c"]
+
+root := justfile_directory()
+
+default:
+    @just --list
+
+install:
+    @python3 -m pip install -r requirements.txt
+
+# Syntax-check every tracked .py without importing third-party deps.
+check:
+    @python3 -m py_compile main.py adapters/*.py domain/*.py infra/*.py tests/*.py
+
+# unittest unit tests (fake repository) — no DB, no asyncpg/fastapi needed.
+test:
+    @python3 -m unittest tests.test_workflows
+
+# Local dev server (single worker; the image runs uvicorn with 3 workers).
+start:
+    @uvicorn main:app --host 0.0.0.0 --port 8000

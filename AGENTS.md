@@ -17,13 +17,22 @@ self-contained children).
 ## Architecture (current)
 
 - **Traefik is the only proxy — no nginx anywhere.** Traefik config and all
-  8 stack images live **inline in `docker-compose.yml`** (the `command:` array
-  for Traefik, `dockerfile_inline:` blocks for every stack). No Dockerfiles, no
-  `Caddyfile`, no `*.conf` files in the repo.
-- **Mega compose:** one `docker compose up -d --build` starts Traefik + Postgres
-  + all 8 API services. Traefik routes each stack by path prefix
-  (`/rust`, `/go`, `/java`, `/dotnet`, `/bun`, `/node`, `/fastapi`, `/php`) and
-  strips the prefix — every backend serves identical contract URIs.
+  8 stack images live **inline in compose files** (the `command:` array
+  for Traefik, `dockerfile_inline:` blocks for every stack — no Dockerfiles, no
+  `Caddyfile`, no `*.conf` files in the repo). The config is split per purpose:
+  `compose/base.yml` (Traefik + Postgres) + one `compose/<stack>.yml` per API;
+  the root `docker-compose.yml` is an aggregator (`include:`) so one command
+  still starts everything.
+- **Mega compose (and any subset):** `docker compose up -d --build` starts
+  Traefik + Postgres + all 8 API services. Because each stack is its own
+  compose file, any subset works identically — `docker compose -f compose/base.yml
+  -f compose/rust.yml -f compose/go.yml up -d --build`, or `just up rust go`.
+  The project is always `api-comp`, so Traefik discovery, `depends_on` health
+  gates, and the shared `pgdata` volume behave the same in both invocation
+  styles. Traefik routes each stack by path prefix (`/rust`, `/go`, `/java`,
+  `/dotnet`, `/bun`, `/node`, `/fastapi`, `/php`) and strips the prefix — every
+  backend serves identical contract URIs. `infra/compose.py` is the single
+  `-f`-chain helper behind the justfile and the DigitalOcean deployer.
 - **Postgres is a pure database.** Each API service runs one process doing one
   thing.
 - **API services are pure, minimal APIs.** A stack does exactly one job: serve
@@ -43,6 +52,12 @@ self-contained children).
   `composer:latest`, `dunglas/frankenphp:php8.4`.
 - **Laravel runs on FrankenPHP** (single binary = Caddy + embedded PHP, HTTP on
   :9000, classic per-request boot) — the previous nginx+fpm glue is gone.
+- **Off-box benchmarking on DigitalOcean (`terraform/`)** deploys exactly 2
+  droplets: `apicomp-api` runs **ONE API setup at a time** (Traefik + Postgres
+  + a single stack, swapped per run via `terraform apply -var stack=<stack>`
+  → `infra/do_deploy.py`) and `apicomp-k6` runs k6 against the API droplet's
+  public IP (`infra/do_bench.py`). Each API setup is benchmarked exactly once,
+  2 droplets exist at any moment.
 
 ## Why per-stack agents
 
@@ -85,14 +100,14 @@ adapter family by **whose data or contract is on the other side of the port**:
 
 | Stack | Hexagonal structure | Verification |
 |---|---|---|
-| `rust-axum` | `src/main.rs` (root) · `src/domain/{models,errors,ports,workflows}.rs` · `src/adapters/{http,postgres}.rs` · `src/infra/config.rs` | ✅ `cargo build --release` (0 warnings) + `cargo test` 12/12 |
-| `go-gin` | `main.go` (root) · `domain/` (models·errors·ports·workflows) · `adapters/` (postgres·http(Gin)) · `infra/config` · `tests/` (workflows + httptest) | ✅ `go build`/`go vet`/`go test` (domain + Gin routes) + live Gin smoke |
-| `java-spring` | `dev.bench` root (composition root) · `domain/{models,errors,ports,workflows}` · `adapters/{http,postgres}` · `infra/config` | ✅ `mvn package` (BUILD SUCCESS) + `mvn test` 7/7 |
-| `cs-dotnet` | `Program.cs` (root) · `Domain/` · `Adapters/` (Http, PostgresFeedRepository) · `Infra/Config.cs` · `Tests/` (xunit, fake repo) | ✅ inline image builds (SDK 10) · ⚠️ local unit test run pending (no SDK on host) |
+| `rust-axum` | `src/main.rs` (root) · `src/domain/{models,errors,ports,workflows}.rs` · `src/adapters/{http,postgres}.rs` · `src/infra/config.rs` | ✅ `cargo build --release` (0 warnings) + `cargo test` 14/14 (incl. strict-bearer unit tests) |
+| `go-gin` | `main.go` (root) · `domain/` (models·errors·ports·workflows) · `adapters/` (postgres·http(Gin)) · `infra/config` · `tests/` (workflows + httptest) | ✅ `go build`/`go vet`/`go test` 16/16 (domain + Gin routes + FK-23503 adapter tests) |
+| `java-spring` | `dev.bench` root (composition root) · `domain/{models,errors,ports,workflows}` · `adapters/{http,postgres}` · `infra/config` | ✅ `mvn package` (BUILD SUCCESS) + `mvn test` 9/9 (7 workflows + 2 bearer-parser) |
+| `cs-dotnet` | `Program.cs` (root) · `Domain/` · `Adapters/` (Http, PostgresFeedRepository) · `Infra/Config.cs` · `Tests/` (xunit, fake repo + adapter parser) | ✅ inline image builds (SDK 10) · ⚠️ local unit tests pending (no SDK on host) |
 | `ts-hono` | `main.ts` (root) · `domain/{models,errors,ports,workflows}.ts` · `adapters/{http(Hono),postgres}.ts` · `infra/config.ts` · `tests/` (bun:test + `app.request` HTTP tests) | ✅ `tsc --noEmit` + `bun test` 15/15 + live Bun serve smoke |
 | `ts-express` | `main.ts` (root) · `domain/{models,errors,ports,workflows}.ts` · `adapters/{postgres,http}.ts` · `infra/config.ts` · `tests/` (strict TS, `tsc --noEmit` + `node --test`) | ✅ `tsc --noEmit` + `node --test` 7/7 + live Traefik smoke 14/14 |
 | `python-fastapi` | `main.py` (root) · `domain/` · `adapters/` · `infra/config` · `tests/` (3.14-slim) | ✅ `unittest` 6/6 + py_compile |
-| `php-laravel` | `app/Domain/{Models,Errors,Ports,Workflows}` · `app/Adapters/PostgresFeedRepository` · `app/Http/Controllers/ApiController` (driving) · `AppServiceProvider` (composition root) · FrankenPHP runtime | ✅ 13 PHP files `php -l` clean · ⚠️ inline image smoke pending |
+| `php-laravel` | `app/Domain/{Models,Errors,Ports,Workflows}` · `app/Adapters/PostgresFeedRepository` · `app/Http/Controllers/ApiController` (driving) · `AppServiceProvider` (composition root) · FrankenPHP runtime | ✅ 14 PHP files `php -l` clean · ⚠️ inline image smoke pending |
 
 ## Contract parity rules enforced for every agent
 
@@ -129,6 +144,8 @@ adapter family by **whose data or contract is on the other side of the port**:
    files), children fully self-contained (never `import` the root). The root
    `justfile` is a thin router whose recipes `cd` into each folder —
    `just <stack> <recipe>` — per the skill's nested-monorepo pattern.
+   **Implemented: all 8 stack folders ship one** (build/test/typecheck/start);
+   `just rust test` delegates into `rust-axum/justfile`, `just test` runs all 8.
 10. **Stateless for Docker replicas.** Every API is stateless — no in-process
     state shared across requests, no leader/instance-count assumptions. Docker
     Compose owns scaling (`--scale` / replicas); a service must behave
@@ -188,13 +205,13 @@ migrated one) must match them, not just the contract text:
 - Finish the mega stack build: `just up` — wait for all 8 images, then seed a
   fresh Postgres (`just seed` → `infra/seed.py`) and smoke-test every prefix:
   `just smoke <stack>` / `just check`.
-- Add one self-contained `justfile` per stack folder (`rust-axum/justfile`,
-  `go-gin/justfile`, …, per rule 9) with `build`/`test`/basic recipes, and
-  wire the root router so `just <stack> <recipe>` works end-to-end.
 - Run `just bench <stack>` per stack; collect `infra/metrics/<stack>.md`
   against the reference numbers in `README.md`.
-- (Optional) install a .NET 10 SDK on the host to run `dotnet test
-  Tests/Apicomp.Tests.csproj` for the cs-dotnet unit tests.
+- (Add) verify the DigitalOcean rig end-to-end: `just tf init` + `just tf apply`
+  (creates 2 droplets), then one `just bench-do <stack>` run and `just tf
+  destroy`.
+- (Optional) install a .NET 10 SDK on the host to run the cs-dotnet unit tests
+  locally (`just dotnet test`).
 - Keep the agents' canonical prompts (in the session log) as the regeneration
   template — a new stack (or a migrated one) must load the
   `hexagonal-architecture` + `justfile` skills and pass the parity rules above.

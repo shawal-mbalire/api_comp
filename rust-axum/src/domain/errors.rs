@@ -3,8 +3,7 @@
 //! Workflows produce `BadRequest` / `NotFound`. The driven adapter (Postgres)
 //! wraps raw `sqlx::Error` into `Database` at the adapter boundary, so driver
 //! errors never leak into workflows. The HTTP adapter maps each variant to a
-//! status code (400 / 404 / 500), carrying the message through so responses
-//! keep their exact historical bodies (e.g. `"content required"`).
+//! status code (400 / 404 / 500).
 
 use std::fmt;
 
@@ -20,10 +19,10 @@ pub enum FeedError {
 }
 
 impl FeedError {
-    /// Stable machine-readable code (mirrors the reference `errors.js`).
-    /// Used by the workflow unit tests to assert error variants without
-    /// depending on message text; kept as the domain's error contract.
-    #[allow(dead_code)]
+    /// Stable machine-readable code, used by the workflow unit tests to assert
+    /// error variants without depending on message text; part of the domain's
+    /// error contract.
+    #[allow(dead_code)] // live in unit tests only (the binary build doesn't call it)
     pub fn code(&self) -> &'static str {
         match self {
             FeedError::BadRequest(_) => "BAD_REQUEST",

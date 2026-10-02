@@ -9,12 +9,17 @@ Arjay McCandless's *"I Tested 8 Programming Languages on a $12 Server"*
 
 ## Architecture
 
-- **Traefik is the only proxy — no nginx anywhere.** Every stack and the Traefik
-  config are defined **inline in `docker-compose.yml`** (`dockerfile_inline:`
-  blocks; no Dockerfiles, no config files). Traefik routes each stack by path
-  prefix (`/rust`, `/go`, `/java`, `/dotnet`, `/bun`, `/node`, `/fastapi`,
-  `/php`) with a `stripPrefix` middleware, so every backend serves the
-  **identical** contract URIs (`/api/feed`, `/api/posts/...`, …).
+- **Traefik is the only proxy — no nginx anywhere.** Images are built inline
+  (`dockerfile_inline:` blocks; no Dockerfiles, no config files) and the compose
+  config is **split into per-purpose files**: `compose/base.yml` (Traefik +
+  Postgres) plus **one `compose/<stack>.yml` per API**, merged by a root
+  `docker-compose.yml` aggregator (`include:`) into one `api-comp` project. So
+  `docker compose up -d --build` still starts everything, and any subset works:
+  `docker compose -f compose/base.yml -f compose/rust.yml up -d --build`.
+  Traefik routes each stack by path prefix (`/rust`, `/go`, `/java`, `/dotnet`,
+  `/bun`, `/node`, `/fastapi`, `/php`) with a `stripPrefix` middleware, so every
+  backend serves the **identical** contract URIs (`/api/feed`, `/api/posts/...`,
+  …).
 - **Postgres is a pure database** — credentials/healthcheck/volume inline in
   compose; **one schema file** (`schema.sql` in `infra/`) auto-applied on fresh volumes.
 - **8 single-purpose services, one process each, one thing each.** Everything is
@@ -33,7 +38,7 @@ Arjay McCandless's *"I Tested 8 Programming Languages on a $12 Server"*
 
 ```
 .
-│  ── 9 folders ─────────────────────────────────────────────────────────
+│  ── 11 folders ─────────────────────────────────────────────────────────
 ├── rust-axum/          # 8 language stacks
 ├── go-gin/
 ├── java-spring/
@@ -42,7 +47,11 @@ Arjay McCandless's *"I Tested 8 Programming Languages on a $12 Server"*
 ├── ts-express/
 ├── python-fastapi/
 ├── php-laravel/
-│       (each: composition root + domain/ + adapters/ + infra/ + tests/)
+│       (each: composition root + domain/ + adapters/ + infra/ + tests/ + justfile)
+├── compose/            # one compose file per purpose:
+│   ├── base.yml        #   Traefik + Postgres (shared infra)
+│   └── rust.yml … php.yml  #   one API service + its Traefik labels each
+├── terraform/          # DigitalOcean rig: 2 droplets (API runner + k6), see README
 └── infra/              # everything else, consolidated
     ├── schema.sql      # the one DB schema file (auto-applied by Postgres init)
     ├── seed.py         # dataset generator + DB seeder (50k/500k/2M) — pure Python
@@ -50,11 +59,14 @@ Arjay McCandless's *"I Tested 8 Programming Languages on a $12 Server"*
     ├── metrics/        # benchmark outputs: <stack>.md + k6 summary JSON
     ├── benchmark.py    # binary-search + 5-min confirmation runner
     ├── smoke-test.py   # contract-conformance checks (14)
+    ├── compose.py      # `-f` file-list helper behind `just up <stack>…`
+    ├── do_deploy.py    # droplet-side stack swap (DigitalOcean API droplet)
+    ├── do_bench.py     # off-box benchmark orchestrator (DigitalOcean k6 droplet)
     ├── openapi.yaml    # OpenAPI 3.0 contract
     ├── api-contract.md # authoritative behavior spec (single source of truth)
     └── acme.json, .env.example
 │  ── 4 root files ──────────────────────────────────────────────────────
-├── docker-compose.yml  # everything inline: traefik + db config + 8 images
+├── docker-compose.yml  # aggregator: include: compose/base.yml + all 8 stacks
 ├── justfile            # the command surface (just up | seed | smoke | bench …)
 ├── agents.md           # how the repo was built with AI agents
 └── README.md
@@ -68,6 +80,11 @@ Arjay McCandless's *"I Tested 8 Programming Languages on a $12 Server"*
 
 # 2) Launch EVERYTHING with ONE command: Traefik + Postgres + all 8 stacks
 just up
+
+#    …or run any SUBSET — every stack is its own compose file:
+just up rust go        # infra + rust + go only
+just build php         # build one stack
+just down rust         # stop infra + rust (the Postgres volume persists)
 
 # 3) Seed the database (50k users / 500k posts / 2M likes)
 just seed
@@ -85,26 +102,55 @@ just bench go          # per-stack report → infra/metrics/go.md
 
 # 7) Unit tests per stack (fake repos, no DB)
 just test              # all stacks / just test rust
+
+# 8) Per-stack tooling — each stack folder ships its own self-contained justfile
+just rust test         # === cargo test   (routed into rust-axum/)
+just node typecheck    # === tsc --noEmit
+just php               # list what the php stack's justfile offers
+
+# 9) Off-box benchmark on DigitalOcean (2 droplets: ONE API at a time + k6)
+#    see terraform/README.md — per API setup, run exactly once:
+just tf apply          # create the 2 droplets, deploy stack from terraform.tfvars
+just bench-do rust     # swap API droplet to rust, then smoke + benchmark via k6
+just bench-do-all      # run each of the 8 API setups exactly once
+just tf destroy        # tear both droplets down
 ```
 
 Every command above delegates to Python (`infra/*.py`) or an inline Python
 shebang in the justfile — there are no shell scripts in this repo.
 
-### All 8 stacks are always running
+### Any subset of stacks, or everything
 
-One `docker compose up -d` starts every service; Traefik routes each stack under
+`docker compose up -d` starts every service; Traefik routes each stack under
 its own prefix: `/rust`, `/go`, `/java`, `/dotnet`, `/bun`, `/node`,
 `/fastapi`, `/php`. Target a stack via its prefix (e.g.
-`http://localhost/rust/api/feed`); on constrained hosts stop the others with
-`docker compose stop rust bun dotnet fastapi php java node`.
+`http://localhost/rust/api/feed`). Running a subset is the same command with
+the extra compose files — `just up rust go` ==
+`docker compose -f compose/base.yml -f compose/rust.yml -f compose/go.yml up -d --build`.
+On constrained hosts, run just the stacks you're benchmarking instead of
+stopping the others after the fact.
 
 Traefik's dashboard is at `http://localhost:8080/dashboard/` (local only).
 
 ### Environments
 
-No per-stack env is required: routing is fixed per prefix in `docker-compose.yml`
-and each service receives `PORT`, `DATABASE_URL`, `POOL_SIZE` from its service
-definition.
+No per-stack env is required: routing is fixed per prefix in the compose files
+(`compose/<stack>.yml`) and each service receives `PORT`, `DATABASE_URL`,
+`POOL_SIZE` from its service definition.
+
+## DigitalOcean — off-box, 2 droplets
+
+For real-network results (no loopback), a Terraform rig in `terraform/` deploys
+**exactly 2 droplets**:
+
+- **`apicomp-api`** — runs **ONE API setup at a time** (Traefik + Postgres +
+  a single stack; `terraform apply -var stack=<stack>` swaps which one).
+- **`apicomp-k6`** — runs k6 (`infra/benchmark.py`) **against the API
+  droplet's public IP**, so load generation never shares a host with the API.
+
+Each API setup runs once per `just bench-do <stack>` (or all 8 with
+`just bench-do-all`), then the API droplet is swapped to the next stack — at
+any moment 2 droplets exist. See `terraform/README.md` for setup.
 
 ## Reference results (the video's baseline)
 

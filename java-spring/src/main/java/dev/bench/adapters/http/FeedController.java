@@ -13,6 +13,8 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * Driving adapter: the HTTP surface of the hexagon.
@@ -23,11 +25,14 @@ import java.util.Map;
  * {@code domain.workflows.FeedService}; domain errors are mapped to HTTP statuses
  * by {@link FeedExceptionHandler}.
  *
- * Contract summary (docs/../infra/api-contract.md): all /api/* routes require auth (the
+ * Contract summary (infra/api-contract.md): all /api/* routes require auth (the
  * bearer token IS the acting user id); /health is public.
  */
 @RestController
 public class FeedController {
+
+    /** Strict bearer rule: exactly {@code Bearer <positive integer>}. */
+    private static final Pattern BEARER = Pattern.compile("^Bearer (\\d+)$");
 
     private final FeedService service;
 
@@ -97,8 +102,7 @@ public class FeedController {
         if (actingUser == null) {
             return unauthorized();
         }
-        String content = body == null ? null
-                : body.get("content") instanceof String s ? s : null;
+        String content = contentOf(body);
         PostDto created = PostDto.from(service.createPost(actingUser, content));
         return ResponseEntity.status(HttpStatus.CREATED).body(created);
     }
@@ -106,30 +110,40 @@ public class FeedController {
     // ------------------------------------------------------------------ helpers
 
     /**
+     * Extract the raw {@code content} field from the request body. A missing body
+     * or a non-string field yields {@code null} → the domain answers 400.
+     */
+    private static String contentOf(Map<String, Object> body) {
+        if (body == null) {
+            return null;
+        }
+        Object raw = body.get("content");
+        return raw instanceof String s ? s : null;
+    }
+
+    /**
      * Benchmark simplification: {@code Authorization: Bearer <user_id>} — the
      * bearer token IS the numeric acting user id. Missing/malformed → {@code null}
      * (the adapter answers {@code 401}).
+     *
+     * <p>Strict parity with every other stack: a bare positive integer only.
+     * {@code 0}, floats, hex, exponents, signs ({@code +7}) and surrounding
+     * whitespace are all malformed → {@code null}.
      */
+    static Long parseBearer(String authHeader) {
+        if (authHeader == null) {
+            return null;
+        }
+        Matcher m = BEARER.matcher(authHeader);
+        if (!m.matches()) {
+            return null;
+        }
+        long value = Long.parseLong(m.group(1));
+        return value > 0 ? value : null;
+    }
+
     private static Long actingUser(HttpServletRequest req) {
-        String auth = req.getHeader("Authorization");
-        if (auth == null) {
-            return null;
-        }
-        String prefix = "Bearer ";
-        if (auth.length() <= prefix.length()
-                || !auth.regionMatches(true, 0, prefix, 0, prefix.length())) {
-            return null;
-        }
-        String token = auth.substring(prefix.length()).trim();
-        if (token.isEmpty()) {
-            return null;
-        }
-        try {
-            long value = Long.parseLong(token);
-            return value > 0 ? value : null;
-        } catch (NumberFormatException e) {
-            return null;
-        }
+        return parseBearer(req.getHeader("Authorization"));
     }
 
     private static ResponseEntity<Map<String, String>> unauthorized() {

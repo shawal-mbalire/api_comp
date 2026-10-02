@@ -1,0 +1,27 @@
+# Go (Gin) — one API service. Combine with compose/base.yml:
+#   docker compose -f compose/base.yml -f compose/go.yml up -d --build
+services:
+  go:
+    build:
+      context: ../go-gin
+      dockerfile_inline: |
+        FROM golang:1.27
+        WORKDIR /app
+        COPY go.mod go.sum ./
+        RUN go mod download
+        COPY . .
+        RUN CGO_ENABLED=0 go build -o /usr/local/bin/server .
+        EXPOSE 8081
+        CMD ["/usr/local/bin/server"]
+    restart: unless-stopped
+    environment: { PORT: 8081, DATABASE_URL: postgres://app:app@db:5432/app, POOL_SIZE: "10" }
+    depends_on:
+      db:
+        condition: service_healthy
+    labels:
+      traefik.enable: "true"
+      traefik.http.routers.go.rule: "PathPrefix(`/go`)"
+      traefik.http.routers.go.entrypoints: "web"
+      traefik.http.routers.go.middlewares: "go-strip"
+      traefik.http.middlewares.go-strip.stripprefix.prefixes: "/go"
+      traefik.http.services.go.loadbalancer.server.port: "8081"

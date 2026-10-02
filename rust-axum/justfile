@@ -1,0 +1,22 @@
+set shell := ["bash", "-euo", "pipefail", "-c"]
+
+root := justfile_directory()
+
+default:
+    @just --list
+
+# Release build — the exact artifact the docker image compiles.
+build:
+    @cargo build --release
+
+# Fast type/borrow check (no codegen).
+check:
+    @cargo check
+
+# Unit tests against a fake repository — no DB, no network.
+test:
+    @cargo test
+
+# Lint (warnings are denied in the image build).
+clippy:
+    @cargo clippy -- -D warnings

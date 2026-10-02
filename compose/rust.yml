@@ -1,0 +1,26 @@
+# Rust (Axum) — one API service. Combine with compose/base.yml:
+#   docker compose -f compose/base.yml -f compose/rust.yml up -d --build
+services:
+  rust:
+    build:
+      context: ../rust-axum
+      dockerfile_inline: |
+        FROM rust:slim
+        WORKDIR /build
+        COPY . .
+        RUN cargo build --release \
+            && cp target/release/backend-rust-axum /usr/local/bin/server
+        EXPOSE 8082
+        CMD ["/usr/local/bin/server"]
+    restart: unless-stopped
+    environment: { PORT: 8082, DATABASE_URL: postgres://app:app@db:5432/app, POOL_SIZE: "10" }
+    depends_on:
+      db:
+        condition: service_healthy
+    labels:
+      traefik.enable: "true"
+      traefik.http.routers.rust.rule: "PathPrefix(`/rust`)"
+      traefik.http.routers.rust.entrypoints: "web"
+      traefik.http.routers.rust.middlewares: "rust-strip"
+      traefik.http.middlewares.rust-strip.stripprefix.prefixes: "/rust"
+      traefik.http.services.rust.loadbalancer.server.port: "8082"

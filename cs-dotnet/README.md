@@ -83,7 +83,9 @@ curl -i -H "Authorization: Bearer 7" http://localhost:5000/api/feed
   (benchmark simplification). Missing/malformed → `401`.
 - `GET /health` is the only unauthenticated endpoint (`200 {"status":"ok"}`).
 - `like` → `204`, `create` → `201`; domain errors map to `400`/`404`.
-- `postedAt` is rendered ISO-8601 UTC (round-trip `"O"`,
-  e.g. `2026-07-01T12:00:00.0000000Z`).
+- `postedAt` is rendered ISO-8601 UTC with fixed millisecond precision
+  (`yyyy-MM-dd'T'HH:mm:ss.fff'Z'`, e.g. `2026-07-01T12:00:00.000Z`). The .NET
+  round-trip `"O"` format (7 fractional digits) is deliberately NOT used — the
+  contract and the smoke test demand exactly 3 (<code>smoke-test.py</code>).
 - Pool size is forced to `POOL_SIZE` (default 10) on the single
   `NpgsqlDataSource` instance.

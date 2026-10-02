@@ -1,0 +1,18 @@
+#cloud-config
+# k6 droplet bootstrap — installs the k6 load-generator binary and python/git
+# (the repo is cloned by the k6_deploy provisioner; benchmarks run on demand).
+package_update: true
+packages:
+  - git
+  - python3
+  - curl
+  - ca-certificates
+runcmd:
+  - |
+    set -e
+    if ! command -v k6 >/dev/null; then
+      curl -fsSL -o /tmp/k6.tgz "https://github.com/grafana/k6/releases/download/${k6_version}/k6-${k6_version}-linux-amd64.tar.gz"
+      tar -xzf /tmp/k6.tgz -C /tmp
+      install -m 0755 "/tmp/k6-${k6_version}-linux-amd64/k6" /usr/local/bin/k6
+    fi
+  - k6 version

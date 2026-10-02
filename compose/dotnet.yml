@@ -1,0 +1,31 @@
+# C# / .NET (ASP.NET Core) — one API service. Combine with compose/base.yml:
+#   docker compose -f compose/base.yml -f compose/dotnet.yml up -d --build
+services:
+  dotnet:
+    build:
+      context: ../cs-dotnet
+      dockerfile_inline: |
+        FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
+        WORKDIR /src
+        COPY apicomp.csproj .
+        RUN dotnet restore
+        COPY . .
+        RUN dotnet publish -c Release --no-restore -o /app/publish
+        FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS final
+        WORKDIR /app
+        ENV ASPNETCORE_URLS=http://+:5000
+        COPY --from=build /app/publish .
+        EXPOSE 5000
+        ENTRYPOINT ["dotnet", "apicomp.dll"]
+    restart: unless-stopped
+    environment: { PORT: 5000, DATABASE_URL: postgres://app:app@db:5432/app, POOL_SIZE: "10" }
+    depends_on:
+      db:
+        condition: service_healthy
+    labels:
+      traefik.enable: "true"
+      traefik.http.routers.dotnet.rule: "PathPrefix(`/dotnet`)"
+      traefik.http.routers.dotnet.entrypoints: "web"
+      traefik.http.routers.dotnet.middlewares: "dotnet-strip"
+      traefik.http.middlewares.dotnet-strip.stripprefix.prefixes: "/dotnet"
+      traefik.http.services.dotnet.loadbalancer.server.port: "5000"

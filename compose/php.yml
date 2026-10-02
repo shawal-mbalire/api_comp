@@ -1,0 +1,67 @@
+# PHP (Laravel 13 on FrankenPHP — single binary, HTTP on :9000, classic
+# per-request boot) — one API service. Combine with compose/base.yml:
+#   docker compose -f compose/base.yml -f compose/php.yml up -d --build
+services:
+  php:
+    build:
+      context: ../php-laravel
+      dockerfile_inline: |
+        FROM composer:latest AS build
+        ENV COMPOSER_ALLOW_SUPERUSER=1 APP_ENV=production APP_DEBUG=false \
+            APP_KEY=base64:MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=
+        WORKDIR /tmp
+        RUN composer create-project laravel/laravel:^13.0 /app \
+                --no-install --no-scripts --no-interaction --prefer-dist --no-progress
+        COPY composer.json /app/composer.json
+        COPY bootstrap/app.php /app/bootstrap/app.php
+        COPY routes/ /app/routes/
+        COPY app/ /app/app/
+        WORKDIR /app
+        RUN composer install --no-dev --no-interaction --prefer-dist --optimize-autoloader --no-progress \
+            && php artisan route:cache
+        FROM dunglas/frankenphp:php8.4
+        RUN set -eux; \
+            apt-get update; \
+            apt-get install -y --no-install-recommends libpq-dev; \
+            docker-php-ext-install -j"$(nproc)" pdo_pgsql; \
+            docker-php-ext-enable opcache; \
+            apt-get remove -y --purge libpq-dev; \
+            apt-get install -y --no-install-recommends libpq5; \
+            rm -rf /var/lib/apt/lists/*
+        ENV PORT=9000 POOL_SIZE=10 DATABASE_URL=postgres://app:app@db:5432/app \
+            APP_ENV=production APP_DEBUG=false \
+            APP_KEY=base64:MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY= \
+            SESSION_DRIVER=cookie CACHE_STORE=array QUEUE_CONNECTION=sync LOG_CHANNEL=stderr
+        WORKDIR /app
+        COPY --from=build /app /app
+        RUN mkdir -p /etc/caddy \
+            && printf '%s\n' '{' '  auto_https off' '  admin off' \
+                 '  frankenphp {' '    num_threads 10' '    max_threads 10' '  }' '}' \
+                 ':9000 {' '  root * /app/public' '  encode zstd gzip' '  php_server' '  header -Server' '}' \
+                 > /etc/caddy/Caddyfile \
+            && printf '%s\n' 'memory_limit = 256M' 'date.timezone = UTC' 'expose_php = Off' \
+                 'opcache.enable = 1' 'opcache.validate_timestamps = 0' 'opcache.memory_consumption = 128' \
+                 'opcache.max_accelerated_files = 20000' 'opcache.jit = tracing' 'opcache.jit_buffer_size = 64M' \
+                 > /usr/local/etc/php/conf.d/zz-frankenphp.ini
+        EXPOSE 9000
+        ENTRYPOINT ["frankenphp", "run", "--config", "/etc/caddy/Caddyfile"]
+    restart: unless-stopped
+    environment: { PORT: 9000, DATABASE_URL: postgres://app:app@db:5432/app, POOL_SIZE: "10" }
+    # FrankenPHP's built-in healthcheck (metrics endpoint) never passes, and
+    # Traefik skips unhealthy containers — so probe the actual /health route.
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://127.0.0.1:9000/health >/dev/null || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 15s
+    depends_on:
+      db:
+        condition: service_healthy
+    labels:
+      traefik.enable: "true"
+      traefik.http.routers.php.rule: "PathPrefix(`/php`)"
+      traefik.http.routers.php.entrypoints: "web"
+      traefik.http.routers.php.middlewares: "php-strip"
+      traefik.http.middlewares.php-strip.stripprefix.prefixes: "/php"
+      traefik.http.services.php.loadbalancer.server.port: "9000"

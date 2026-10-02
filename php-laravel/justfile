@@ -1,0 +1,27 @@
+set shell := ["bash", "-euo", "pipefail", "-c"]
+set positional-arguments := true
+
+root := justfile_directory()
+
+default:
+    @just --list
+
+# Install the slim manifest + dev deps (phpunit). Requires PHP + composer locally.
+install:
+    @composer install
+
+# Unit tests (fake repository, no DB). Skips gracefully when vendor/ is absent —
+# dev deps are not installed in the production image.
+test:
+    #!/usr/bin/env python3
+    import os, subprocess, sys
+
+    runner = "vendor/bin/phpunit"
+    if not os.path.exists(runner):
+        print(f"{runner} missing — run `just install` first (SKIP)")
+        raise SystemExit(0)
+    raise SystemExit(subprocess.run([runner, "--filter=FeedServiceTest"]).returncode)
+
+# PHP syntax check over the tracked PHP files.
+lint:
+    @find app bootstrap routes tests -name '*.php' -print0 | xargs -0 -n1 php -l

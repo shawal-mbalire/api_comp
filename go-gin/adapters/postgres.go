@@ -104,15 +104,22 @@ func (r *PostgresFeedRepository) Like(ctx context.Context, userID, postID int64)
 func (r *PostgresFeedRepository) CreatePost(ctx context.Context, userID int64, content string) (domain.Post, error) {
 	var p domain.Post
 	err := r.pool.QueryRow(ctx,
-		"INSERT INTO posts (user_id, content) VALUES ($1, $2) RETURNING id, user_id, content, posted_at",
-		userID, content).Scan(&p.ID, &p.UserID, &p.Content, &p.PostedAt)
+		"INSERT INTO posts (user_id, content) VALUES ($1, $2) RETURNING id, posted_at",
+		userID, content).Scan(&p.ID, &p.PostedAt)
 	if err != nil {
 		return domain.Post{}, normalizeErr(err)
 	}
+	// Author snapshot: the FK on posts.user_id guarantees the acting user exists,
+	// but a defensive check keeps the race-safe 404 parity with the other stacks.
 	author, err := r.FindByUserID(ctx, userID)
 	if err != nil {
 		return domain.Post{}, err
 	}
+	if author == nil {
+		return domain.Post{}, domain.NewNotFoundError("not found")
+	}
+	p.UserID = userID
+	p.Content = content
 	p.Username = author.Username
 	p.DisplayName = author.DisplayName
 	p.LikeCount = 0

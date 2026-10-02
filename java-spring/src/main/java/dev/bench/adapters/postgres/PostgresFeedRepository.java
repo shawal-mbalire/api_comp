@@ -22,7 +22,7 @@ import java.util.Optional;
 /**
  * Driven adapter: PostgreSQL {@link FeedRepository}.
  *
- * Owns the raw SQL (verbatim from docs/../infra/api-contract.md, with the only permitted
+ * Owns the raw SQL (verbatim from infra/api-contract.md, with the only permitted
  * placeholder adaptation for the driver, {@code $1} → {@code ?}) and maps rows →
  * domain models. Depends only on JdbcTemplate + the port contract; no app imports
  * beyond the domain. DB failure types are translated here, never leaked outward.
@@ -94,13 +94,26 @@ public class PostgresFeedRepository implements FeedRepository {
         }
     }
 
+    /**
+     * Is this a Postgres foreign-key violation (SQLSTATE 23503)? The repo-wide
+     * parity decision maps acting-user FK failures on like/create to 404; any
+     * other integrity error must propagate as a 500, not be swallowed.
+     */
+    private static boolean isForeignKeyViolation(DataIntegrityViolationException e) {
+        Throwable cause = e.getMostSpecificCause();
+        return cause instanceof SQLException se && "23503".equals(se.getSQLState());
+    }
+
     @Override
     public void like(long userId, long postId) {
         try {
             jdbc.update(LIKE_SQL, userId, postId);
         } catch (DataIntegrityViolationException e) {
-            // Acting user id does not exist → FK violation. Legacy behavior: 404.
-            throw new NotFoundError("not found");
+            // Acting user id does not exist → FK violation → 404 (parity).
+            if (isForeignKeyViolation(e)) {
+                throw new NotFoundError("not found");
+            }
+            throw e;
         }
     }
 
@@ -113,8 +126,11 @@ public class PostgresFeedRepository implements FeedRepository {
             // snapshot from the JOIN, likeCount 0 from the likes subquery.
             return findPostById(newId).orElseThrow(() -> new NotFoundError("not found"));
         } catch (DataIntegrityViolationException e) {
-            // Acting user id does not exist → FK violation. Legacy behavior: 404.
-            throw new NotFoundError("not found");
+            // Acting user id does not exist → FK violation → 404 (parity).
+            if (isForeignKeyViolation(e)) {
+                throw new NotFoundError("not found");
+            }
+            throw e;
         }
     }
 }

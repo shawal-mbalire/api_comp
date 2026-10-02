@@ -31,3 +31,13 @@ metrics/
 .DS_Store
 *.log
 acme.json
+
+# Bun stack uses bun.lock only — an npm lockfile there is stale by construction
+# (it previously carried ts-express-era Express dependencies).
+ts-hono/package-lock.json
+
+# ---- terraform / digital ocean (never commit tokens or state) ----
+.terraform/
+*.tfstate
+*.tfstate.*
+terraform.tfvars

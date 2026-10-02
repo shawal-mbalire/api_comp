@@ -1,0 +1,16 @@
+set shell := ["bash", "-euo", "pipefail", "-c"]
+
+root := justfile_directory()
+
+default:
+    @just --list
+
+build:
+    @dotnet build -c Release
+
+# xunit unit tests (fake repository + adapter parser) — no DB.
+test:
+    @dotnet test Tests/Apicomp.Tests.csproj
+
+run:
+    @dotnet run -c Release

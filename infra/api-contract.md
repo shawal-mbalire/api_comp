@@ -131,6 +131,6 @@ ports → adapters; see the per-stack READMEs) while preserving exact SQL behavi
 - **Auth on `GET /api/feed` and `GET /api/posts/{id}`:** all `/api/*` endpoints
   require the bearer token (except `/health`) — enforced by the HTTP adapter in
   every stack, and the k6 harness always sends the header.
-- **400 message bodies:** endpoints return `{"error":"bad request"}` /
-  `{"error":"content required"}`; the smoke test asserts status codes only.
+- **400 message bodies:** every 400 is `{"error":"bad request"}` (all 8 stacks
+  emit the identical body; the smoke test asserts status codes only).
 - **`postedAt`:** ISO-8601 UTC, millisecond precision (`....Z`).

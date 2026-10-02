@@ -20,7 +20,8 @@ pub fn parse_id(raw: &str) -> Result<i64, FeedError> {
 pub fn validate_content(raw: &str) -> Result<String, FeedError> {
     let content = raw.trim().to_string();
     if content.is_empty() {
-        return Err(FeedError::bad_request("content required"));
+        // Every stack renders all 400s as {"error":"bad request"}.
+        return Err(FeedError::bad_request("bad request"));
     }
     Ok(content)
 }
