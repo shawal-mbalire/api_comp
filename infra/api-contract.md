@@ -117,9 +117,9 @@ per process and its own port inside the compose network.
 | Rust (Axum)      | `rust-axum`         | `/rust`  | 8082 | SQLx, tokio. Pool 10. |
 | Go (Gin)       | `go-gin`          | `/go`    | 8081 | Gin (gin-gonic) driving adapter, pgx pool 10. |
 | Java (Spring 3)  | `java-spring`       | `/java`  | 8080 | MVC + Tomcat, JdbcTemplate, Hikari max 10. |
-| C# (ASP.NET Core)| `dotnet`            | `/dotnet`| 5000 | Minimal API, Npgsql pool 10. |
-| Bun (Hono on Bun) | `bun`        | `/bun`   | 3001 | Hono on Bun's native HTTP server (web-standard, no Express); pool 10. |
-| Node (Express 5) | `node-express`      | `/node`  | 3000 | Single process, pool 10. |
+| C# (ASP.NET Core)| `cs-dotnet`        | `/dotnet`| 5000 | Minimal API, Npgsql pool 10. |
+| Bun (Hono on Bun) | `ts-hono`  | `/bun`   | 3001 | Hono on Bun's native HTTP server (web-standard, no Express); pool 10. |
+| Node (Express 5) | `ts-express`      | `/node`  | 3000 | Single process, pool 10. |
 | Python (FastAPI) | `python-fastapi`    | `/fastapi` | 8000 | Uvicorn 3 workers, pool 10 each. |
 | PHP (Laravel 13) | `php-laravel`       | `/php`   | 9000 | FrankenPHP classic mode, 10 threads (each keeps one persistent PDO connection), OPcache + route cache. |
 

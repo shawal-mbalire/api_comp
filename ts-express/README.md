@@ -7,7 +7,7 @@ types natively (`node main.ts`), so `tsc --noEmit` is purely a type-checker.
 ## Hexagonal layout
 
 ```
-node-express/
+ts-express/
 ├── main.ts                  # composition root (wires adapters → workflows → HTTP)
 ├── domain/                  # pure application logic — zero framework imports
 │   ├── models.ts            # User/Post interfaces + frozen factories
@@ -46,7 +46,7 @@ docker compose up -d --build
 curl -i -H "Authorization: Bearer 7" http://localhost/node/api/feed
 ```
 
-`node-express` shares its hexagonal `domain/` and Postgres adapter byte-identical
-with the Bun stack (`../bun`), which swaps the Express driving adapter for
+`ts-express` shares its hexagonal `domain/` and Postgres adapter byte-identical
+with the Bun stack (`../ts-hono`), which swaps the Express driving adapter for
 **Hono on Bun's native HTTP server** — the runtime/framework comparison is the
 point of these two stacks.

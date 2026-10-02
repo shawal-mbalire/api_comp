@@ -3,12 +3,12 @@
 Single-process benchmark backend implementing `../infra/api-contract.md`: raw Npgsql
 SQL (no ORM, no external cache), connection pool forced to `POOL_SIZE` (10 per
 process). The code is organized as **Hexagonal Architecture (Ports & Adapters)**
-mirroring the `node-express` template.
+mirroring the `ts-express` template.
 
 ## Hexagonal layout
 
 ```
-dotnet/
+cs-dotnet/
 ├── Program.cs                  # composition root (wires config → adapters → workflow → HTTP → run)
 ├── Domain/                     # pure application logic — zero framework imports
 │   ├── Models.cs               # record User, record Post (pure data)
@@ -38,7 +38,7 @@ logic.
 Requires the .NET 10 SDK:
 
 ```bash
-cd dotnet
+cd cs-dotnet
 PORT=5000 DATABASE_URL=postgres://app:app@localhost:5432/app POOL_SIZE=10 dotnet run
 ```
 

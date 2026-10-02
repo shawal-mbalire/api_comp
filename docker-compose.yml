@@ -143,7 +143,7 @@ services:
 
   dotnet:
     build:
-      context: ./dotnet
+      context: ./cs-dotnet
       dockerfile_inline: |
         FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
         WORKDIR /src
@@ -172,7 +172,7 @@ services:
 
   bun:
     build:
-      context: ./bun
+      context: ./ts-hono
       dockerfile_inline: |
         FROM oven/bun:1-slim
         WORKDIR /app
@@ -196,7 +196,7 @@ services:
 
   node:
     build:
-      context: ./node-express
+      context: ./ts-express
       dockerfile_inline: |
         FROM node:24-slim
         WORKDIR /app

@@ -47,7 +47,7 @@ pattern (root router + self-contained children).
 
 All eight stacks must implement the same API, same SQL, same pool rules. Isolated
 agents avoided cross-implementation interference while an explicit shared
-contract guaranteed parity. `node-express` (Express 5) and `bun` (Hono on Bun's
+contract guaranteed parity. `ts-express` (Express 5) and `ts-hono` (Hono on Bun's
 native HTTP server — no Express) share their hexagonal `domain/` + Postgres
 adapter byte-identical and were written directly; only the HTTP driving adapter
 differs.
@@ -59,9 +59,9 @@ differs.
 | `rust-axum` | `src/main.rs` (root) · `src/domain/{models,errors,ports,workflows}.rs` · `src/adapters/{http,postgres}.rs` · `src/infra/config.rs` | ✅ `cargo build --release` (0 warnings) + `cargo test` 12/12 |
 | `go-gin` | `main.go` (root) · `domain/` (models·errors·ports·workflows) · `adapters/` (postgres·http(Gin)) · `infra/config` · `tests/` (workflows + httptest) | ✅ `go build`/`go vet`/`go test` (domain + Gin routes) + live Gin smoke |
 | `java-spring` | `dev.bench` root (composition root) · `domain/{models,errors,ports,workflows}` · `adapters/{http,postgres}` · `infra/config` | ✅ `mvn package` (BUILD SUCCESS) + `mvn test` 7/7 |
-| `dotnet` | `Program.cs` (root) · `Domain/` · `Adapters/` (Http, PostgresFeedRepository) · `Infra/Config.cs` · `Tests/` (xunit, fake repo) | ✅ inline image builds (SDK 10) · ⚠️ local unit test run pending (no SDK on host) |
-| `bun` | `main.ts` (root) · `domain/{models,errors,ports,workflows}.ts` · `adapters/{http(Hono),postgres}.ts` · `infra/config.ts` · `tests/` (bun:test + `app.request` HTTP tests) | ✅ `tsc --noEmit` + `bun test` 15/15 + live Bun serve smoke |
-| `node-express` | `main.ts` (root) · `domain/{models,errors,ports,workflows}.ts` · `adapters/{postgres,http}.ts` · `infra/config.ts` · `tests/` (strict TS, `tsc --noEmit` + `node --test`) | ✅ `tsc --noEmit` + `node --test` 7/7 + live Traefik smoke 14/14 |
+| `cs-dotnet` | `Program.cs` (root) · `Domain/` · `Adapters/` (Http, PostgresFeedRepository) · `Infra/Config.cs` · `Tests/` (xunit, fake repo) | ✅ inline image builds (SDK 10) · ⚠️ local unit test run pending (no SDK on host) |
+| `ts-hono` | `main.ts` (root) · `domain/{models,errors,ports,workflows}.ts` · `adapters/{http(Hono),postgres}.ts` · `infra/config.ts` · `tests/` (bun:test + `app.request` HTTP tests) | ✅ `tsc --noEmit` + `bun test` 15/15 + live Bun serve smoke |
+| `ts-express` | `main.ts` (root) · `domain/{models,errors,ports,workflows}.ts` · `adapters/{postgres,http}.ts` · `infra/config.ts` · `tests/` (strict TS, `tsc --noEmit` + `node --test`) | ✅ `tsc --noEmit` + `node --test` 7/7 + live Traefik smoke 14/14 |
 | `python-fastapi` | `main.py` (root) · `domain/` · `adapters/` · `infra/config` · `tests/` (3.14-slim) | ✅ `unittest` 6/6 + py_compile |
 | `php-laravel` | `app/Domain/{Models,Errors,Ports,Workflows}` · `app/Adapters/PostgresFeedRepository` · `app/Http/Controllers/ApiController` (driving) · `AppServiceProvider` (composition root) · FrankenPHP runtime | ✅ 13 PHP files `php -l` clean · ⚠️ inline image smoke pending |
 
@@ -99,8 +99,8 @@ differs.
     state shared across requests, no leader/instance-count assumptions. Docker
     Compose owns scaling (`--scale` / replicas); a service must behave
     correctly at any replica count with zero code changes.
-11. **TypeScript for the Node/Bun stacks — and strong types.** `node-express`
-    (Express 5) and `bun` (Hono on Bun's native HTTP server — **no Express**)
+11. **TypeScript for the Node/Bun stacks — and strong types.** `ts-express`
+    (Express 5) and `ts-hono` (Hono on Bun's native HTTP server — **no Express**)
     are TypeScript (`.ts`, ESM) with **no emitted JS**
     anywhere: Node 24+ strips types natively and Bun runs `.ts` natively, so
     `tsc --noEmit` (strict) is a type-checker only (`just typecheck`; the
@@ -121,13 +121,13 @@ differs.
 
 | Stack | Local build/test | Inline image build | Live contract (smoke-test 14 checks) |
 |---|---|---|---|
-| node-express | ✅ | ✅ (node:24-slim) | ✅ via Traefik `/node` (earlier stack) |
+| ts-express | ✅ | ✅ (node:24-slim) | ✅ via Traefik `/node` (earlier stack) |
 | go-gin | ✅ go test (Gin route tests via httptest) | building (golang:1.27) | ✅ via Traefik `/go` (earlier stack) |
 | rust-axum | ✅ cargo | building (rust:slim) | pending (fresh DB + run) |
 | java-spring | ✅ mvn | building (temurin 25) | pending |
 | python-fastapi | ✅ unittest | building (3.14-slim) | pending |
-| dotnet | ✅ image only | ✅ (SDK 10 → aspnet 10) | pending |
-| bun | ✅ `bun test` 15/15 + `tsc --noEmit` (Hono on Bun, no Express) | building (bun:1-slim) | pending |
+| cs-dotnet | ✅ image only | ✅ (SDK 10 → aspnet 10) | pending |
+| ts-hono | ✅ `bun test` 15/15 + `tsc --noEmit` (Hono on Bun, no Express) | building (bun:1-slim) | pending |
 | php-laravel | ✅ php -l 13 files | building (frankenphp php8.4) | pending |
 
 ## Contract-parity decisions (Oct 2026 audit)
@@ -147,7 +147,7 @@ migrated one) must match them, not just the contract text:
 - **PHP pool = exactly POOL_SIZE (10)**: the inline FrankenPHP Caddyfile pins
   `num_threads 10` + `max_threads 10` and each thread holds one persistent PDO
   connection. No FPM anywhere; comments must not say FPM.
-- **dotnet trims post content** on create (like every other stack).
+- **cs-dotnet trims post content** on create (like every other stack).
 
 ## Follow-ups
 
@@ -160,7 +160,7 @@ migrated one) must match them, not just the contract text:
 - Run `just bench <stack>` per stack; collect `infra/metrics/<stack>.md`
   against the reference numbers in `README.md`.
 - (Optional) install a .NET 10 SDK on the host to run `dotnet test
-  Tests/Apicomp.Tests.csproj` for the dotnet unit tests.
+  Tests/Apicomp.Tests.csproj` for the cs-dotnet unit tests.
 - Keep the agents' canonical prompts (in the session log) as the regeneration
   template — a new stack (or a migrated one) must load the
   `hexagonal-architecture` + `justfile` skills and pass the parity rules above.

@@ -2,22 +2,22 @@
 
 Benchmark backend implementing `../infra/api-contract.md` with **Hono** — a
 web-standard (Request/Response) framework — served by **Bun's native HTTP
-server**. Unlike the Node stack (`../node-express`) there is **no Express**
+server**. Unlike the Node stack (`../ts-express`) there is **no Express**
 anywhere: Hono is the only web layer and Bun runs the `.ts` files natively
 (zero build step; `tsc --noEmit` is a type-checker only).
 
 ## Layout
 
 ```
-bun/
+ts-hono/
 ├── main.ts                  # composition root → Bun.serve({ fetch: app.fetch })
-├── domain/                  # byte-identical to node-express: pure application
+├── domain/                  # byte-identical to ts-express: pure application
 │   ├── models.ts            #   logic (User/Post interfaces + frozen factories)
 │   ├── errors.ts            #   BadRequestError, NotFoundError
 │   ├── ports.ts             #   FeedRepository + Clock port interfaces
 │   └── workflows.ts         #   FeedService — pure orchestrators
 ├── adapters/
-│   ├── postgres.ts          # driven adapter (byte-identical to node-express)
+│   ├── postgres.ts          # driven adapter (byte-identical to ts-express)
 │   └── http.ts              # driving adapter: Hono routes, auth + DTO mapping
 ├── infra/
 │   └── config.ts            # typed config from env (only place env vars are read)

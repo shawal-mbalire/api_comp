@@ -74,7 +74,7 @@ typecheck:
     #!/usr/bin/env python3
     import subprocess, sys
 
-    stacks = ["node-express", "bun"]
+    stacks = ["ts-express", "ts-hono"]
     failed = 0
     for stack in stacks:
         r = subprocess.run(["npx", "tsc", "--noEmit"], cwd=stack)
@@ -91,14 +91,14 @@ test stack="all":
     from concurrent.futures import ThreadPoolExecutor
 
     all_stacks = {
-        "node":    ("node-express",     ["node", "--test", "tests/"]),
-        "bun":     ("bun",               ["bun", "test", "tests/"]),
-        "go":      ("go-gin",           ["go", "test", "./..."]),
-        "rust":    ("rust-axum",        ["cargo", "test"]),
-        "java":    ("java-spring",      ["mvn", "-q", "test"]),
-        "fastapi": ("python-fastapi",   ["python3", "-m", "unittest", "tests.test_workflows"]),
-        "dotnet":  ("dotnet",           ["dotnet", "test"]),
-        "php":     ("php-laravel",      None),  # needs dev deps (phpunit) in a full Laravel env
+        "node":    ("ts-express",        ["node", "--test", "tests/"]),
+        "bun":     ("ts-hono",           ["bun", "test", "tests/"]),
+        "go":      ("go-gin",            ["go", "test", "./..."]),
+        "rust":    ("rust-axum",         ["cargo", "test"]),
+        "java":    ("java-spring",       ["mvn", "-q", "test"]),
+        "fastapi": ("python-fastapi",    ["python3", "-m", "unittest", "tests.test_workflows"]),
+        "dotnet":  ("cs-dotnet",         ["dotnet", "test"]),
+        "php":     ("php-laravel",       None),  # needs dev deps (phpunit) in a full Laravel env
     }
     requested = sys.argv[1] if len(sys.argv) > 1 else "all"
     targets = all_stacks if requested == "all" else {requested: all_stacks[requested]}

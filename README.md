@@ -37,9 +37,9 @@ Arjay McCandless's *"I Tested 8 Programming Languages on a $12 Server"*
 ├── rust-axum/          # 8 language stacks
 ├── go-gin/
 ├── java-spring/
-├── dotnet/
-├── bun/
-├── node-express/
+├── cs-dotnet/
+├── ts-hono/
+├── ts-express/
 ├── python-fastapi/
 ├── php-laravel/
 │       (each: composition root + domain/ + adapters/ + infra/ + tests/)

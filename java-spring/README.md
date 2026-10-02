@@ -3,7 +3,7 @@
 MVC + Tomcat benchmark backend implementing `../infra/api-contract.md`: `JdbcTemplate`
 over raw SQL + HikariCP, no ORM (no JPA), no external cache. Refactored into
 Hexagonal Architecture (Ports & Adapters) following the repo's canonical
-`node-express` template.
+`ts-express` template.
 
 ## Hexagonal layout
 
