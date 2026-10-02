@@ -19,8 +19,11 @@ final class FeedServiceTest extends TestCase
     {
         $this->assertSame(7, FeedService::parseId('7'));
         foreach (['abc', '0', '-3', '1.5'] as $bad) {
-            $this->expectException(BadRequestError::class);
-            FeedService::parseId($bad);
+            try {
+                FeedService::parseId($bad);
+                $this->fail("expected BadRequestError for '$bad'");
+            } catch (BadRequestError) {
+            }
         }
     }
 
@@ -28,8 +31,11 @@ final class FeedServiceTest extends TestCase
     {
         $this->assertSame('hi', FeedService::validateContent('  hi  '));
         foreach (['   ', '', null, 42] as $bad) {
-            $this->expectException(BadRequestError::class);
-            FeedService::validateContent($bad);
+            try {
+                FeedService::validateContent($bad);
+                $this->fail('expected BadRequestError for '.var_export($bad, true));
+            } catch (BadRequestError) {
+            }
         }
     }
 
@@ -59,8 +65,19 @@ final class FeedServiceTest extends TestCase
     public function testCreateBlankContent(): void
     {
         $service = new FeedService(new FakeRepo());
-        $this->expectException(BadRequestError::class);
-        $service->createPost(1, '   ');
+        try {
+            $service->createPost(1, '   ');
+            $this->fail('expected BadRequestError for blank content');
+        } catch (BadRequestError) {
+        }
+    }
+
+    public function testCreatePostTrimsContent(): void
+    {
+        $service = new FeedService(new FakeRepo());
+        $post = $service->createPost(1, '  hi there  ');
+        $this->assertSame('hi there', $post->content);
+        $this->assertSame(0, $post->likeCount);
     }
 }
 

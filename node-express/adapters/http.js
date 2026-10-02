@@ -29,13 +29,16 @@ function userDto(user) {
   return { id: user.id, username: user.username, displayName: user.displayName };
 }
 
-/**
+/** 
  * Benchmark simplification: `Authorization: Bearer <user_id>` — the bearer token
  * IS the numeric acting user id. Missing/malformed → 401 at this boundary.
+ * The token must be a bare positive integer; `Number()` alone would also accept
+ * "7.0", "1e3", "0x10" or surrounding whitespace, diverging from the strict
+ * parsers in the other stacks.
  * @returns {number|null}
  */
 function actingUserId(req) {
-  const m = /^Bearer (.+)$/.exec(req.headers.authorization || '');
+  const m = /^Bearer (\d+)$/.exec(req.headers.authorization || '');
   if (!m) return null;
   const id = Number(m[1]);
   return Number.isInteger(id) && id > 0 ? id : null;

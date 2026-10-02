@@ -25,7 +25,8 @@ class AppServiceProvider extends ServiceProvider
     }
 
     /**
-     * Infra config: translate DATABASE_URL into the pgsql connection config.
+     * Infrastructure config: translate DATABASE_URL into the pgsql connection
+     * config.
      *
      * The benchmark harness only injects PORT / DATABASE_URL / POOL_SIZE (see
      * docker-compose.yml). Laravel's per-component DB_* variables (DB_HOST,
@@ -33,9 +34,10 @@ class AppServiceProvider extends ServiceProvider
      * provided, so we parse DATABASE_URL here at boot, before any request
      * touches the database. Connections are created lazily on first use.
      *
-     * POOL_SIZE is informational for this stack: each of the 10 static FPM
-     * workers keeps one persistent PDO connection (PDO::ATTR_PERSISTENT), so
-     * the container's Postgres pool is bounded by the worker count (= 10).
+     * Pool sizing matches the contract's "exactly POOL_SIZE (10) per process":
+     * the FrankenPHP Caddyfile pins num_threads to 10 (see docker-compose.yml),
+     * and each thread keeps one persistent PDO connection, so the container's
+     * Postgres pool is bounded at 10 in steady state.
      */
     public function boot(): void
     {
@@ -66,7 +68,7 @@ class AppServiceProvider extends ServiceProvider
                 // in the contract SQL bind positionally, exactly like Laravel's
                 // own Postgres grammar.
                 PDO::ATTR_EMULATE_PREPARES => false,
-                // One persistent connection per FPM worker (pool of 10).
+                // One persistent connection per FrankenPHP thread (pool of 10).
                 PDO::ATTR_PERSISTENT => true,
             ],
         ]);

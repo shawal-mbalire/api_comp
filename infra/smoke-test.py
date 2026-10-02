@@ -12,12 +12,18 @@ Exits non-zero on any violation.
 """
 import argparse
 import json
+import re
 import sys
 import urllib.error
 import urllib.request
 
 FIELDS = ["id", "userId", "username", "displayName", "content", "postedAt", "likeCount"]
 FAILED = []
+
+# Contract: ISO-8601 UTC with fixed millisecond precision ("2026-07-01T12:00:00.000Z").
+# Strict — the previous loose check (any trailing Z) missed Go's RFC3339Nano
+# truncation (e.g. ".120" -> ".12", ".000" -> none) and .NET's 7-digit form.
+ISO_MS_UTC = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$")
 
 
 def call(base, method, path, token=None, body=None):
@@ -48,9 +54,7 @@ def check(name, cond, detail=""):
 
 
 def iso_utc(s):
-    if not isinstance(s, str) or "T" not in s or "Z" not in s and "+" not in s:
-        return False
-    return s.endswith("Z") or "+00:00" in s
+    return isinstance(s, str) and bool(ISO_MS_UTC.fullmatch(s))
 
 
 def main():
@@ -79,7 +83,7 @@ def main():
         all(isinstance(p, dict) and all(k in p for k in FIELDS) for p in b)
     check("GET /api/feed 200 + 20 posts + shape", feed_ok, f"got {s}, len {len(b) if isinstance(b, list) else 'n/a'}")
     if isinstance(b, list) and b:
-        check("feed postedAt ISO-8601 Z", iso_utc(b[0]["postedAt"]), f"{b[0].get('postedAt')}")
+        check("feed postedAt ISO-8601 .mmmZ", iso_utc(b[0]["postedAt"]), f"{b[0].get('postedAt')}")
         check("feed has author", isinstance(b[0]["username"], str) and b[0]["username"] != "")
 
     # single post

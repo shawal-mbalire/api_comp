@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from datetime import datetime
 
 
 @dataclass(frozen=True)
@@ -19,5 +20,5 @@ class Post:
     username: str
     display_name: str
     content: str
-    posted_at: object  # datetime (UTC)
+    posted_at: datetime  # UTC, straight from TIMESTAMPTZ rows
     like_count: int = field(default=0)

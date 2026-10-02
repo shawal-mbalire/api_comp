@@ -3,8 +3,10 @@ package adapters
 
 import (
 	"context"
+	"errors"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"backend-go/domain"
@@ -32,6 +34,20 @@ func NewPostgresFeedRepository(ctx context.Context, connectionURI string, poolSi
 
 // Close releases the pool (LifetimePort hook — called by composition root).
 func (r *PostgresFeedRepository) Close() { r.pool.Close() }
+
+// normalizeErr maps driver errors to domain errors: foreign-key violations
+// (SQLSTATE 23503 — e.g. a bearer token whose acting user doesn't exist on
+// like/create) become NotFound, matching the other stacks' 404s.
+func normalizeErr(err error) error {
+	if err == nil {
+		return nil
+	}
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) && pgErr.Code == "23503" {
+		return domain.NewNotFoundError("not found")
+	}
+	return err
+}
 
 func (r *PostgresFeedRepository) FindByUserID(ctx context.Context, id int64) (*domain.User, error) {
 	row := r.pool.QueryRow(ctx,
@@ -82,7 +98,7 @@ func (r *PostgresFeedRepository) Like(ctx context.Context, userID, postID int64)
 	_, err := r.pool.Exec(ctx,
 		"INSERT INTO likes (user_id, post_id) VALUES ($1, $2) ON CONFLICT DO NOTHING",
 		userID, postID)
-	return err
+	return normalizeErr(err)
 }
 
 func (r *PostgresFeedRepository) CreatePost(ctx context.Context, userID int64, content string) (domain.Post, error) {
@@ -91,7 +107,7 @@ func (r *PostgresFeedRepository) CreatePost(ctx context.Context, userID int64, c
 		"INSERT INTO posts (user_id, content) VALUES ($1, $2) RETURNING id, user_id, content, posted_at",
 		userID, content).Scan(&p.ID, &p.UserID, &p.Content, &p.PostedAt)
 	if err != nil {
-		return domain.Post{}, err
+		return domain.Post{}, normalizeErr(err)
 	}
 	author, err := r.FindByUserID(ctx, userID)
 	if err != nil {

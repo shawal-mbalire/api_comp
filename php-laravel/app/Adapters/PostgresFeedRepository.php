@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Adapters;
 
+use App\Domain\Errors\NotFoundError;
 use App\Domain\Models\Post;
 use App\Domain\Models\User;
 use App\Domain\Ports\FeedRepository;
@@ -52,20 +53,45 @@ final class PostgresFeedRepository implements FeedRepository
 
     public function like(int $userId, int $postId): void
     {
-        DB::statement(
-            'INSERT INTO likes (user_id, post_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
-            [$userId, $postId],
-        );
+        try {
+            DB::statement(
+                'INSERT INTO likes (user_id, post_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
+                [$userId, $postId],
+            );
+        } catch (\Illuminate\Database\QueryException $e) {
+            // SQLSTATE 23503: acting user doesn't exist (post is pre-checked) → 404 parity.
+            if ($this->isForeignKeyViolation($e)) {
+                throw new NotFoundError();
+            }
+            throw $e;
+        }
     }
 
     public function createPost(int $userId, string $content): Post
     {
-        $created = DB::select(
-            'INSERT INTO posts (user_id, content) VALUES ($1, $2) RETURNING id, posted_at',
-            [$userId, $content],
-        );
+        try {
+            $created = DB::select(
+                'INSERT INTO posts (user_id, content) VALUES ($1, $2) RETURNING id, posted_at',
+                [$userId, $content],
+            );
+        } catch (\Illuminate\Database\QueryException $e) {
+            // SQLSTATE 23503: acting user doesn't exist → 404 parity.
+            if ($this->isForeignKeyViolation($e)) {
+                throw new NotFoundError();
+            }
+            throw $e;
+        }
 
         return $this->findPostById((int) $created[0]->id);
+    }
+
+    /** Is this a Postgres foreign-key violation (SQLSTATE 23503)? */
+    private function isForeignKeyViolation(\Illuminate\Database\QueryException $e): bool
+    {
+        $prev = $e->getPrevious();
+        $info = $prev instanceof \PDOException ? $prev->errorInfo : null;
+
+        return is_array($info) && ($info[0] ?? '') === '23503';
     }
 
     /** Map a raw row (stdClass) to the domain Post model. */

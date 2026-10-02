@@ -5,6 +5,7 @@
 // models. Depends only on `pg` + the port contract; no app imports beyond models.
 
 const { Pool } = require('pg');
+const { NotFoundError } = require('../domain/errors');
 const { post } = require('../domain/models');
 
 // Raw shared SQL (identical across all 8 stacks).
@@ -52,16 +53,30 @@ function createPostgresFeedRepository(config) {
     },
 
     async like(userId, postId) {
-      await pool.query(
-        'INSERT INTO likes (user_id, post_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
-        [userId, postId]);
+      try {
+        await pool.query(
+          'INSERT INTO likes (user_id, post_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
+          [userId, postId]);
+      } catch (e) {
+        // SQLSTATE 23503: acting user doesn't exist (post is pre-checked) →
+        // 404, matching the other stacks.
+        if (e.code === '23503') throw new NotFoundError('not found');
+        throw e;
+      }
     },
 
     async createPost(userId, content) {
-      const { rows } = await pool.query(
-        'INSERT INTO posts (user_id, content) VALUES ($1, $2) RETURNING id, user_id, posted_at',
-        [userId, content]);
-      const r = rows[0];
+      let r;
+      try {
+        const { rows } = await pool.query(
+          'INSERT INTO posts (user_id, content) VALUES ($1, $2) RETURNING id, user_id, posted_at',
+          [userId, content]);
+        r = rows[0];
+      } catch (e) {
+        // SQLSTATE 23503: acting user doesn't exist → 404 parity.
+        if (e.code === '23503') throw new NotFoundError('not found');
+        throw e;
+      }
       // Author snapshot from the users table (single extra lookup, same as reference).
       const author = await this.findByUserId(userId);
       return post({

@@ -9,7 +9,7 @@ Hexagonal Architecture (Ports & Adapters) following the repo's canonical
 
 ```
 java-spring/
-├── (image built inline in docker-compose.yml)                  # multi-stage: maven build → eclipse-temurin:21-jre
+├── (image built inline in docker-compose.yml)                  # multi-stage: maven build → eclipse-temurin:25-jre
 ├── pom.xml                     # Spring Boot 3.3, JUnit 5 test scope
 ├── src/main/java/dev/bench/
 │   ├── BackendApplication.java # composition root: @SpringBootApplication + FeedService bean

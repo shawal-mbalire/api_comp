@@ -1,4 +1,4 @@
-# Feed API — .NET 8 (ASP.NET Core Minimal API + Npgsql, hexagonal)
+# Feed API — .NET 10 (ASP.NET Core Minimal API + Npgsql, hexagonal)
 
 Single-process benchmark backend implementing `../infra/api-contract.md`: raw Npgsql
 SQL (no ORM, no external cache), connection pool forced to `POOL_SIZE` (10 per
@@ -35,7 +35,7 @@ logic.
 
 ## Run
 
-Requires the .NET 8 SDK:
+Requires the .NET 10 SDK:
 
 ```bash
 cd dotnet

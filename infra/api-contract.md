@@ -15,8 +15,8 @@ endpoint paths, status codes, JSON field names, SQL semantics, pool sizing.
 - No ORM, no external cache (no Redis/Memcached). Only the raw database driver +
   a connection pool.
 - Connection pool size must be **exactly 10 per process** (the experiment's hard
-  limit). For multi-worker runtimes (Uvicorn 3 workers, PHP-FPM 10 workers) each
-  worker/process gets its own pool of 10.
+  limit). For multi-worker runtimes (Uvicorn 3 workers, FrankenPHP 10 threads)
+  each worker/process gets its own pool of 10.
 
 ## Environment variables
 
@@ -121,7 +121,7 @@ per process and its own port inside the compose network.
 | Bun (Express)    | `bun`               | `/bun`   | 3001 | Same Express app as Node, run by Bun. |
 | Node (Express 5) | `node-express`      | `/node`  | 3000 | Single process, pool 10. |
 | Python (FastAPI) | `python-fastapi`    | `/fastapi` | 8000 | Uvicorn 3 workers, pool 10 each. |
-| PHP (Laravel 13) | `php-laravel`       | `/php`   | 9000 | PHP-FPM 10 workers, OPcache + route cache. |
+| PHP (Laravel 13) | `php-laravel`       | `/php`   | 9000 | FrankenPHP classic mode, 10 threads (each keeps one persistent PDO connection), OPcache + route cache. |
 
 Each stack implements this contract with **Hexagonal Architecture** (domain →
 ports → adapters; see the per-stack READMEs) while preserving exact SQL behavior.

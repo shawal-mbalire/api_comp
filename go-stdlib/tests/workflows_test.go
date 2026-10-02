@@ -3,6 +3,7 @@ package tests
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -60,23 +61,32 @@ func mustNoErr(t *testing.T, err error) {
 	}
 }
 
-func expectedCode(t *testing.T, err error, code string) {
+// Assert the error is exactly a BadRequestError (400 at the HTTP boundary),
+// so a swapped error type can never silently pass.
+func expectBadRequest(t *testing.T, err error) {
 	t.Helper()
-	if err == nil || err.Error() == "" {
-		t.Fatalf("expected %s error, got nil", code)
+	var bad *domain.BadRequestError
+	if !errors.As(err, &bad) {
+		t.Fatalf("expected BadRequestError, got %T: %v", err, err)
+	}
+}
+
+// Assert the error is exactly a NotFoundError (404 at the HTTP boundary).
+func expectNotFound(t *testing.T, err error) {
+	t.Helper()
+	var nf *domain.NotFoundError
+	if !errors.As(err, &nf) {
+		t.Fatalf("expected NotFoundError, got %T: %v", err, err)
 	}
 }
 
 func TestParseIDRejectsInvalid(t *testing.T) {
-	if _, err := domain.ParseID("abc"); err == nil {
-		t.Fatal("expected error for abc")
-	}
-	if _, err := domain.ParseID("0"); err == nil {
-		t.Fatal("expected error for 0")
-	}
-	if _, err := domain.ParseID("-1"); err == nil {
-		t.Fatal("expected error for -1")
-	}
+	_, err := domain.ParseID("abc")
+	expectBadRequest(t, err)
+	_, err = domain.ParseID("0")
+	expectBadRequest(t, err)
+	_, err = domain.ParseID("-1")
+	expectBadRequest(t, err)
 	if _, err := domain.ParseID("7"); err != nil {
 		t.Fatalf("7 should parse: %v", err)
 	}
@@ -96,7 +106,7 @@ func TestValidateContent(t *testing.T) {
 func TestGetMeUnknownUser(t *testing.T) {
 	svc := domain.NewFeedService(newFakeRepo())
 	_, err := svc.GetMe(context.Background(), 999)
-	expectedCode(t, err, "not found")
+	expectNotFound(t, err)
 	u, err := svc.GetMe(context.Background(), 1)
 	mustNoErr(t, err)
 	if u.Username != "user_000001" {
@@ -106,12 +116,10 @@ func TestGetMeUnknownUser(t *testing.T) {
 
 func TestGetPostErrors(t *testing.T) {
 	svc := domain.NewFeedService(newFakeRepo())
-	if _, err := svc.GetPost(context.Background(), "nope"); err == nil {
-		t.Fatal("expected bad request")
-	}
-	if _, err := svc.GetPost(context.Background(), "999"); err == nil {
-		t.Fatal("expected not found")
-	}
+	_, err := svc.GetPost(context.Background(), "nope")
+	expectBadRequest(t, err)
+	_, err = svc.GetPost(context.Background(), "999")
+	expectNotFound(t, err)
 	p, err := svc.GetPost(context.Background(), "10")
 	mustNoErr(t, err)
 	if p.ID != 10 {
@@ -121,17 +129,15 @@ func TestGetPostErrors(t *testing.T) {
 
 func TestLikePostUnknown(t *testing.T) {
 	svc := domain.NewFeedService(newFakeRepo())
-	if err := svc.LikePost(context.Background(), 1, "999"); err == nil {
-		t.Fatal("expected not found")
-	}
+	err := svc.LikePost(context.Background(), 1, "999")
+	expectNotFound(t, err)
 	mustNoErr(t, svc.LikePost(context.Background(), 1, "10"))
 }
 
 func TestCreatePostBlank(t *testing.T) {
 	svc := domain.NewFeedService(newFakeRepo())
-	if _, err := svc.CreatePost(context.Background(), 1, "   "); err == nil {
-		t.Fatal("expected bad request")
-	}
+	_, err := svc.CreatePost(context.Background(), 1, "   ")
+	expectBadRequest(t, err)
 	p, err := svc.CreatePost(context.Background(), 1, "  first post ")
 	mustNoErr(t, err)
 	if p.Content != "first post" || p.LikeCount != 0 {

@@ -43,11 +43,15 @@ WORDS = [
 def mulberry32(seed: int):
     """Deterministic PRNG (same stream as the original Node generator)."""
     a = seed
-    while True:
+
+    def rand() -> float:
+        nonlocal a
         a = (a + 0x6D2B79F5) & 0xFFFFFFFF
         t = ((a ^ (a >> 15)) * (1 | a)) & 0xFFFFFFFF
         t = (t + ((t ^ (t >> 7)) * (61 | t))) & 0xFFFFFFFF
-        yield (((t ^ (t >> 14)) & 0xFFFFFFFF) / 4294967296.0)
+        return ((t ^ (t >> 14)) & 0xFFFFFFFF) / 4294967296.0
+
+    return rand
 
 
 def iso(ms: int) -> str:

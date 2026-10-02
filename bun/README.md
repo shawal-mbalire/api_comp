@@ -1,7 +1,7 @@
 # Feed API — Express 5 on the Bun runtime (hexagonal)
 
 **Byte-identical application source** to `../node-express` (domain/, adapters/,
-infra/, main.js, tests/) — swapping only the runtime (Node 22 → Bun) per the
+infra/, main.js, tests/) — swapping only the runtime (Node 24 → Bun) per the
 experiment, zero application-code rewrite.
 
 ## Layout

@@ -1,4 +1,4 @@
-# Feed API — Express 5 on Node 22 (hexagonal)
+# Feed API — Express 5 on Node 24 (hexagonal)
 
 Single-process benchmark backend implementing `../infra/api-contract.md`.
 

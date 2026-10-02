@@ -65,8 +65,8 @@ The repo ships `tests/Unit/FeedServiceTest.php` (fake FeedRepository, no DB).
 Run it where dev dependencies are installed:
 
 ```bash
-composer install --dev               # includes phpunit
-php artisan test --filter=FeedServiceTest
+composer install                # installs dev deps incl. phpunit
+vendor/bin/phpunit --filter=FeedServiceTest
 ```
 
 ## DATABASE_URL bootstrap (infra config)
@@ -74,7 +74,9 @@ php artisan test --filter=FeedServiceTest
 The harness injects only `PORT` / `DATABASE_URL` / `POOL_SIZE`; Laravel's
 `DB_HOST/DB_PORT/...` are absent, so `AppServiceProvider::boot()` parses
 `DATABASE_URL` into the pgsql connection config (lazy connections). `POOL_SIZE`
-is informational for this stack (FrankenPHP manages its PHP process pool).
+is honored via the FrankenPHP Caddyfile in `docker-compose.yml`: `num_threads 10`
+pins the thread pool, and each thread keeps one persistent PDO connection — the
+container's Postgres pool is bounded at 10 (the contract's hard limit).
 
 ## Version fallback
 

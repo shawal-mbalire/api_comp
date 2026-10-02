@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
-	"time"
 
 	"backend-go/domain"
 )
@@ -116,7 +115,10 @@ func postDto(p domain.Post) map[string]any {
 		"username":    p.Username,
 		"displayName": p.DisplayName,
 		"content":     p.Content,
-		"postedAt":    p.PostedAt.UTC().Format(time.RFC3339Nano),
+		// Contract: ISO-8601 UTC with fixed millisecond precision (.mmmZ).
+		// RFC3339Nano strips trailing zeros (e.g. .120 -> .12), so use a
+		// fixed layout that always renders exactly 3 fractional digits.
+		"postedAt":    p.PostedAt.UTC().Format("2006-01-02T15:04:05.000Z"),
 		"likeCount":   p.LikeCount,
 	}
 }

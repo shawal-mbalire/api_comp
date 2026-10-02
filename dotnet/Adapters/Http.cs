@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Apicomp.Domain;
@@ -114,15 +115,16 @@ public static class ApiEndpoints
         return Results.Json(new { error = "internal error" }, statusCode: 500);
     }
 
-    /// <summary>Post → contract camelCase DTO; postedAt rendered ISO-8601 UTC
-    /// (round-trip "O": e.g. 2026-07-01T12:00:00.0000000Z).</summary>
+    /// <summary>Post → contract camelCase DTO; postedAt rendered ISO-8601 UTC with
+    /// fixed millisecond precision (e.g. 2026-07-01T12:00:00.000Z), matching the
+    /// exact contract format used by the other stacks.</summary>
     private static PostDto ToPostDto(Post p) => new(
         p.Id,
         p.UserId,
         p.Username,
         p.DisplayName,
         p.Content,
-        p.PostedAtUtc.ToString("O"),
+        p.PostedAtUtc.ToUniversalTime().ToString("yyyy-MM-dd'T'HH:mm:ss.fffK", CultureInfo.InvariantCulture),
         p.LikeCount);
 
     /// <summary>Benchmark simplification: `Authorization: Bearer <user_id>` — the bearer

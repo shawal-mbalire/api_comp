@@ -31,8 +31,16 @@ impl PostgresFeedRepository {
     }
 }
 
-/// Translate a raw driver error into a domain `FeedError::Database`.
+/// Translate a raw driver error into a domain error. FK violations (SQLSTATE
+/// 23503 — e.g. a valid-format bearer token whose acting user doesn't exist)
+/// become `FeedError::NotFound` so every stack answers 404 consistently;
+/// anything else is a `FeedError::Database` (500).
 fn db_err(e: sqlx::Error) -> FeedError {
+    if let sqlx::Error::Database(db) = &e {
+        if db.code().as_deref() == Some("23503") {
+            return FeedError::not_found("not found");
+        }
+    }
     FeedError::database(e.to_string())
 }
 

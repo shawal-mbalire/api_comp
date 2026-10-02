@@ -4,7 +4,9 @@ from the rest of the app beyond the domain models/port."""
 from __future__ import annotations
 
 import asyncpg
+from asyncpg.exceptions import ForeignKeyViolationError
 
+from domain.errors import NotFoundError
 from domain.models import Post, User
 
 POST_SELECT = """
@@ -54,18 +56,26 @@ class PostgresFeedRepository:
         return None if row is None else row_to_post(row)
 
     async def like(self, user_id: int, post_id: int) -> None:
-        async with self._pool.acquire() as conn:
-            await conn.execute(
-                "INSERT INTO likes (user_id, post_id) VALUES ($1, $2) ON CONFLICT DO NOTHING",
-                user_id, post_id)
+        try:
+            async with self._pool.acquire() as conn:
+                await conn.execute(
+                    "INSERT INTO likes (user_id, post_id) VALUES ($1, $2) ON CONFLICT DO NOTHING",
+                    user_id, post_id)
+        except ForeignKeyViolationError:
+            # Acting user doesn't exist (post existence is pre-checked) → 404 parity.
+            raise NotFoundError() from None
 
     async def create_post(self, user_id: int, content: str) -> Post:
-        async with self._pool.acquire() as conn:
-            row = await conn.fetchrow(
-                "INSERT INTO posts (user_id, content) VALUES ($1, $2) RETURNING id, user_id, posted_at",
-                user_id, content)
-            author = await conn.fetchrow(
-                "SELECT id, username, display_name FROM users WHERE id = $1", user_id)
+        try:
+            async with self._pool.acquire() as conn:
+                row = await conn.fetchrow(
+                    "INSERT INTO posts (user_id, content) VALUES ($1, $2) RETURNING id, user_id, posted_at",
+                    user_id, content)
+                author = await conn.fetchrow(
+                    "SELECT id, username, display_name FROM users WHERE id = $1", user_id)
+        except ForeignKeyViolationError:
+            # Acting user doesn't exist → 404 parity.
+            raise NotFoundError() from None
         return Post(
             id=row["id"],
             user_id=row["user_id"],

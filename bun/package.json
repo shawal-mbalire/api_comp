@@ -1,8 +1,8 @@
 {
-  "name": "backend-node-express",
+  "name": "backend-bun",
   "version": "1.0.0",
   "private": true,
-  "description": "Express 5 on Node 22 — hexagonal benchmark feed API",
+  "description": "Express 5 on the Bun runtime — hexagonal benchmark feed API",
   "scripts": {
     "start": "bun run main.js",
     "test": "node --test tests/"

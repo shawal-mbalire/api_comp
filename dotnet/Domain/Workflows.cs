@@ -20,13 +20,15 @@ public sealed class FeedService
         return id;
     }
 
-    /// <summary>Validate post content (required, non-empty). Pure.</summary>
+    /// <summary>Validate post content (required, non-empty). Pure. Returns the
+    /// trimmed content so every stack persists trimmed input (parity with
+    /// rust/java/node/go/python/php).</summary>
     /// <exception cref="BadRequestException">when <paramref name="raw"/> is null or blank.</exception>
     public static string ValidateContent(string? raw)
     {
         if (string.IsNullOrWhiteSpace(raw))
             throw new BadRequestException("bad request");
-        return raw;
+        return raw.Trim();
     }
 
     /// <summary>GET /api/me — returns the acting user or NotFoundException.</summary>

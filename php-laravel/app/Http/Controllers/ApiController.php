@@ -128,7 +128,10 @@ class ApiController
             return null;
         }
 
-        return (int) $m[1];
+        $userId = (int) $m[1];
+
+        // A bare "0" is malformed per the contract (token IS a positive user id).
+        return $userId > 0 ? $userId : null;
     }
 
     /** Map a domain Post to the camelCase contract JSON shape. */

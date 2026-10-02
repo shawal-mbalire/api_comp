@@ -1,7 +1,8 @@
 """Composition root: reads config → builds the asyncpg pool (per worker) → wires
 the PostgresFeedRepository into the FeedService → exposes the FastAPI driving
-adapter. Uvicorn runs 3 workers (see Dockerfile), so this wiring runs once per
-process, each with its own pool of exactly POOL_SIZE connections."""
+adapter. Uvicorn runs 3 workers (see the `CMD` in docker-compose.yml), so this
+wiring runs once per process, each with its own pool of exactly POOL_SIZE
+connections."""
 from __future__ import annotations
 
 from adapters.http import create_app
@@ -20,8 +21,3 @@ async def _make_service():
 
 
 app = create_app(_make_service)
-
-if __name__ == "__main__":
-    import uvicorn
-
-    uvicorn.run("main:app", host="0.0.0.0", port=load_settings().port, workers=3)

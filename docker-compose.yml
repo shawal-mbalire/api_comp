@@ -52,7 +52,9 @@ services:
       POSTGRES_PASSWORD: app
       POSTGRES_DB: app
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      # Postgres 18+ requires the mount at the parent dir (data lands in a
+      # version-specific subdir, keeping pg_upgrade compatible).
+      - pgdata:/var/lib/postgresql
       - ./infra/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U app -d app"]
@@ -264,7 +266,7 @@ services:
             docker-php-ext-install -j"$(nproc)" pdo_pgsql; \
             docker-php-ext-enable opcache; \
             apt-get remove -y --purge libpq-dev; \
-            apt-get autoremove -y; \
+            apt-get install -y --no-install-recommends libpq5; \
             rm -rf /var/lib/apt/lists/*
         ENV PORT=9000 POOL_SIZE=10 DATABASE_URL=postgres://app:app@db:5432/app \
             APP_ENV=production APP_DEBUG=false \
@@ -273,7 +275,8 @@ services:
         WORKDIR /app
         COPY --from=build /app /app
         RUN mkdir -p /etc/caddy \
-            && printf '%s\n' '{' '  auto_https off' '  admin off' '}' \
+            && printf '%s\n' '{' '  auto_https off' '  admin off' \
+                 '  frankenphp {' '    num_threads 10' '    max_threads 10' '  }' '}' \
                  ':9000 {' '  root * /app/public' '  encode zstd gzip' '  php_server' '  header -Server' '}' \
                  > /etc/caddy/Caddyfile \
             && printf '%s\n' 'memory_limit = 256M' 'date.timezone = UTC' 'expose_php = Off' \
@@ -284,6 +287,14 @@ services:
         ENTRYPOINT ["frankenphp", "run", "--config", "/etc/caddy/Caddyfile"]
     restart: unless-stopped
     environment: { PORT: 9000, DATABASE_URL: postgres://app:app@db:5432/app, POOL_SIZE: "10" }
+    # FrankenPHP's built-in healthcheck (metrics endpoint) never passes, and
+    # Traefik skips unhealthy containers — so probe the actual /health route.
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://127.0.0.1:9000/health >/dev/null || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 15s
     depends_on:
       db:
         condition: service_healthy

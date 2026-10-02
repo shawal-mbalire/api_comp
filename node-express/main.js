@@ -22,7 +22,7 @@ async function main() {
   const app = createHttpApp(service);
 
   const server = app.listen(config.port, () => {
-    console.log(`node-express on :${config.port} (pool ${config.poolSize})`);
+    console.log(`feed-api on :${config.port} (pool ${config.poolSize})`);
   });
 
   // LifetimePort: graceful exit — close the DB pool on SIGTERM/SIGINT.

@@ -51,6 +51,7 @@ public class FeedServiceTests
     public void ValidateContent_RejectsBlank()
     {
         Assert.Equal("hi", FeedService.ValidateContent("hi"));
+        Assert.Equal("hi", FeedService.ValidateContent("  hi  ")); // trimmed
         Assert.Throws<BadRequestException>(() => FeedService.ValidateContent("   "));
         Assert.Throws<BadRequestException>(() => FeedService.ValidateContent(""));
         Assert.Throws<BadRequestException>(() => FeedService.ValidateContent(null));
