@@ -1,6 +1,6 @@
 # API Contract (identical across all 8 stacks)
 
-Every backend in the 8 root stack folders (`rust-axum`, `go-stdlib`, …) implements
+Every backend in the 8 root stack folders (`rust-axum`, `go-gin`, …) implements
 **exactly** the same HTTP API so the benchmark is a fair comparison of the
 runtime/framework, not of endpoint design.
 
@@ -115,7 +115,7 @@ per process and its own port inside the compose network.
 | Stack            | Dir                 | Prefix   | Port | Notes |
 |------------------|---------------------|----------|------|-------|
 | Rust (Axum)      | `rust-axum`         | `/rust`  | 8082 | SQLx, tokio. Pool 10. |
-| Go (net/http)    | `go-stdlib`         | `/go`    | 8081 | pgx pool 10. |
+| Go (Gin)       | `go-gin`          | `/go`    | 8081 | Gin (gin-gonic) driving adapter, pgx pool 10. |
 | Java (Spring 3)  | `java-spring`       | `/java`  | 8080 | MVC + Tomcat, JdbcTemplate, Hikari max 10. |
 | C# (ASP.NET Core)| `dotnet`            | `/dotnet`| 5000 | Minimal API, Npgsql pool 10. |
 | Bun (Hono on Bun) | `bun`        | `/bun`   | 3001 | Hono on Bun's native HTTP server (web-standard, no Express); pool 10. |

@@ -57,7 +57,7 @@ differs.
 | Stack | Hexagonal structure | Verification |
 |---|---|---|
 | `rust-axum` | `src/main.rs` (root) · `src/domain/{models,errors,ports,workflows}.rs` · `src/adapters/{http,postgres}.rs` · `src/infra/config.rs` | ✅ `cargo build --release` (0 warnings) + `cargo test` 12/12 |
-| `go-stdlib` | `main.go` (root) · `domain/` (models·errors·ports·workflows) · `adapters/` (postgres·http) · `infra/config` · `tests/` | ✅ `go build`/`go vet`/`go test` + live Traefik smoke 14/14 |
+| `go-gin` | `main.go` (root) · `domain/` (models·errors·ports·workflows) · `adapters/` (postgres·http(Gin)) · `infra/config` · `tests/` (workflows + httptest) | ✅ `go build`/`go vet`/`go test` (domain + Gin routes) + live Gin smoke |
 | `java-spring` | `dev.bench` root (composition root) · `domain/{models,errors,ports,workflows}` · `adapters/{http,postgres}` · `infra/config` | ✅ `mvn package` (BUILD SUCCESS) + `mvn test` 7/7 |
 | `dotnet` | `Program.cs` (root) · `Domain/` · `Adapters/` (Http, PostgresFeedRepository) · `Infra/Config.cs` · `Tests/` (xunit, fake repo) | ✅ inline image builds (SDK 10) · ⚠️ local unit test run pending (no SDK on host) |
 | `bun` | `main.ts` (root) · `domain/{models,errors,ports,workflows}.ts` · `adapters/{http(Hono),postgres}.ts` · `infra/config.ts` · `tests/` (bun:test + `app.request` HTTP tests) | ✅ `tsc --noEmit` + `bun test` 15/15 + live Bun serve smoke |
@@ -122,7 +122,7 @@ differs.
 | Stack | Local build/test | Inline image build | Live contract (smoke-test 14 checks) |
 |---|---|---|---|
 | node-express | ✅ | ✅ (node:24-slim) | ✅ via Traefik `/node` (earlier stack) |
-| go-stdlib | ✅ | building (golang:1.27) | ✅ via Traefik `/go` (earlier stack) |
+| go-gin | ✅ go test (Gin route tests via httptest) | building (golang:1.27) | ✅ via Traefik `/go` (earlier stack) |
 | rust-axum | ✅ cargo | building (rust:slim) | pending (fresh DB + run) |
 | java-spring | ✅ mvn | building (temurin 25) | pending |
 | python-fastapi | ✅ unittest | building (3.14-slim) | pending |
@@ -155,7 +155,7 @@ migrated one) must match them, not just the contract text:
   fresh Postgres (`just seed` → `infra/seed.py`) and smoke-test every prefix:
   `just smoke <stack>` / `just check`.
 - Add one self-contained `justfile` per stack folder (`rust-axum/justfile`,
-  `go-stdlib/justfile`, …, per rule 9) with `build`/`test`/basic recipes, and
+  `go-gin/justfile`, …, per rule 9) with `build`/`test`/basic recipes, and
   wire the root router so `just <stack> <recipe>` works end-to-end.
 - Run `just bench <stack>` per stack; collect `infra/metrics/<stack>.md`
   against the reference numbers in `README.md`.

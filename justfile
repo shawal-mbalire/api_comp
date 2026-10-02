@@ -93,7 +93,7 @@ test stack="all":
     all_stacks = {
         "node":    ("node-express",     ["node", "--test", "tests/"]),
         "bun":     ("bun",               ["bun", "test", "tests/"]),
-        "go":      ("go-stdlib",        ["go", "test", "./..."]),
+        "go":      ("go-gin",           ["go", "test", "./..."]),
         "rust":    ("rust-axum",        ["cargo", "test"]),
         "java":    ("java-spring",      ["mvn", "-q", "test"]),
         "fastapi": ("python-fastapi",   ["python3", "-m", "unittest", "tests.test_workflows"]),

@@ -35,7 +35,7 @@ Arjay McCandless's *"I Tested 8 Programming Languages on a $12 Server"*
 .
 │  ── 9 folders ─────────────────────────────────────────────────────────
 ├── rust-axum/          # 8 language stacks
-├── go-stdlib/
+├── go-gin/
 ├── java-spring/
 ├── dotnet/
 ├── bun/

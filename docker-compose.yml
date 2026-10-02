@@ -90,7 +90,7 @@ services:
 
   go:
     build:
-      context: ./go-stdlib
+      context: ./go-gin
       dockerfile_inline: |
         FROM golang:1.27
         WORKDIR /app

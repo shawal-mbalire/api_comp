@@ -1,12 +1,13 @@
-# Feed API — Go (stdlib `net/http` + pgx) — hexagonal
+# Feed API — Go with Gin (gin-gonic) + pgx — hexagonal
 
-Single-process benchmark backend implementing `../infra/api-contract.md`.
+Single-process benchmark backend implementing `../infra/api-contract.md`, using
+**Gin** (gin-gonic) as the HTTP driving adapter — no other web framework.
 
 ## Hexagonal layout
 
 ```
-go-stdlib/
-├── main.go                 # composition root (wires adapters → workflows → HTTP)
+go-gin/
+├── main.go                 # composition root (wires adapters → workflows → Gin)
 ├── domain/                 # pure application logic — no net/http or DB imports
 │   ├── models.go           # User, Post
 │   ├── errors.go           # BadRequestError, NotFoundError
@@ -14,19 +15,23 @@ go-stdlib/
 │   └── workflows.go        # FeedService — pure orchestrators (validate → drive repo)
 ├── adapters/
 │   ├── postgres.go         # driven adapter: FeedRepository (pgx, raw SQL)
-│   └── http.go             # driving adapter: net/http handlers, auth + DTO mapping
+│   └── http.go             # driving adapter: Gin routes, auth + DTO mapping
 ├── infra/
 │   └── config.go           # typed config from env (only place env vars are read)
 ├── tests/
-│   └── workflows_test.go   # unit tests with a fake in-memory repository
+│   ├── workflows_test.go   # unit tests with a fake in-memory repository
+│   └── http_test.go        # Gin route tests via httptest (no socket/DB)
 ├── (image built inline in docker-compose.yml)
 └── go.mod
 ```
 
+Dependencies point inward: `domain` knows only the `FeedRepository` port; the
+Postgres adapter implements it; the Gin adapter maps HTTP ⇄ domain.
+
 ## Run
 
 ```bash
-go test ./...                          # unit tests (fake repo)
+go test ./...                          # domain + Gin route tests (fake repo)
 PORT=8081 DATABASE_URL=postgres://app:app@localhost:5432/app go run .
 ```
 

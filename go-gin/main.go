@@ -33,14 +33,16 @@ func main() {
 	// Domain workflows depend only on the port.
 	service := domain.NewFeedService(repo)
 
-	// Driving adapter: stdlib net/http (single process, exactly POOL_SIZE conns).
+	// Driving adapter: Gin (gin-gonic) on a net/http server (single process,
+	// exactly POOL_SIZE conns).
+	engine := adapters.NewHandler(service)
 	srv := &http.Server{
 		Addr:    ":" + config.Port,
-		Handler: adapters.NewHandler(service),
+		Handler: engine,
 	}
 
 	go func() {
-		log.Printf("go-stdlib on :%s (pool %d)", config.Port, config.PoolSize)
+		log.Printf("go-gin on :%s (pool %d)", config.Port, config.PoolSize)
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			log.Fatalf("http: %v", err)
 		}
