@@ -1,8 +1,7 @@
 // Unit tests for domain/workflows.ts using a fake FeedRepository (pure, in-memory).
-// Run: node --test tests/   (Node 24+ type stripping; `npm run typecheck` first)
+// Run: bun test tests/
 
-import { test } from 'node:test';
-import assert from 'node:assert/strict';
+import { test, expect } from 'bun:test';
 import { createFeedService, parseId, validateContent } from '../domain/workflows.ts';
 import { BadRequestError, NotFoundError } from '../domain/errors.ts';
 import { post, user } from '../domain/models.ts';
@@ -52,56 +51,54 @@ function fakeRepository(overrides: Partial<FeedRepository> = {}): FeedRepository
 
 // ── pure functions ──────────────────────────────────────────────────────────
 test('parseId accepts positive integers only', () => {
-  assert.equal(parseId('7'), 7);
-  assert.throws(() => parseId('abc'), BadRequestError);
-  assert.throws(() => parseId('0'), BadRequestError);
-  assert.throws(() => parseId('-3'), BadRequestError);
-  assert.throws(() => parseId('1.5'), BadRequestError);
+  expect(parseId('7')).toBe(7);
+  expect(() => parseId('abc')).toThrow(BadRequestError);
+  expect(() => parseId('0')).toThrow(BadRequestError);
+  expect(() => parseId('-3')).toThrow(BadRequestError);
+  expect(() => parseId('1.5')).toThrow(BadRequestError);
 });
 
 test('validateContent trims and rejects empty', () => {
-  assert.equal(validateContent('  hi  '), 'hi');
-  assert.throws(() => validateContent('   '), BadRequestError);
-  assert.throws(() => validateContent(''), BadRequestError);
-  assert.throws(() => validateContent(42), BadRequestError);
+  expect(validateContent('  hi  ')).toBe('hi');
+  expect(() => validateContent('   ')).toThrow(BadRequestError);
+  expect(() => validateContent('')).toThrow(BadRequestError);
+  expect(() => validateContent(42)).toThrow(BadRequestError);
 });
 
 // ── workflows (fake repo) ───────────────────────────────────────────────────
 test('getMe returns the user; unknown id → NotFoundError', async () => {
   const svc = createFeedService(fakeRepository());
   const me = await svc.getMe(1);
-  assert.equal(me.id, 1);
-  await assert.rejects(() => svc.getMe(999), NotFoundError);
+  expect(me.id).toBe(1);
+  expect(svc.getMe(999)).rejects.toThrow(NotFoundError);
 });
 
 test('getFeed returns the posts', async () => {
   const svc = createFeedService(fakeRepository());
   const feed = await svc.getFeed(1);
-  const first = feed[0];
-  assert.equal(first?.likeCount, 2);
+  expect(feed[0]?.likeCount).toBe(2);
 });
 
 test('getPost maps 404/400 correctly', async () => {
   const svc = createFeedService(fakeRepository());
   const got = await svc.getPost(1, '10');
-  assert.equal(got.id, 10);
-  await assert.rejects(() => svc.getPost(1, '999'), NotFoundError);
-  await assert.rejects(() => svc.getPost(1, 'nope'), BadRequestError);
+  expect(got.id).toBe(10);
+  expect(svc.getPost(1, '999')).rejects.toThrow(NotFoundError);
+  expect(svc.getPost(1, 'nope')).rejects.toThrow(BadRequestError);
 });
 
 test('likePost is idempotent; unknown post → NotFoundError', async () => {
-  const repo = fakeRepository();
-  const svc = createFeedService(repo);
+  const svc = createFeedService(fakeRepository());
   await svc.likePost(1, '10'); // no throw
   await svc.likePost(1, '10'); // idempotent by contract (ON CONFLICT DO NOTHING)
-  await assert.rejects(() => svc.likePost(1, '999'), NotFoundError);
-  await assert.rejects(() => svc.likePost(1, 'bad'), BadRequestError);
+  expect(svc.likePost(1, '999')).rejects.toThrow(NotFoundError);
+  expect(svc.likePost(1, 'bad')).rejects.toThrow(BadRequestError);
 });
 
 test('createPost validates content then persists', async () => {
   const svc = createFeedService(fakeRepository());
   const created = await svc.createPost(1, '  first post ');
-  assert.equal(created.content, 'first post');
-  assert.equal(created.likeCount, 0);
-  await assert.rejects(() => svc.createPost(1, '  '), BadRequestError);
+  expect(created.content).toBe('first post');
+  expect(created.likeCount).toBe(0);
+  expect(svc.createPost(1, '  ')).rejects.toThrow(BadRequestError);
 });

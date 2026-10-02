@@ -46,6 +46,7 @@ docker compose up -d --build
 curl -i -H "Authorization: Bearer 7" http://localhost/node/api/feed
 ```
 
-The exact same source (`domain/`, `adapters/`, `infra/`, `main.ts`, `tests/`,
-`tsconfig.json`) runs byte-identical on Bun (`../bun-express`) — the runtime swap
-is the entire experiment for this stack.
+`node-express` shares its hexagonal `domain/` and Postgres adapter byte-identical
+with the Bun stack (`../bun`), which swaps the Express driving adapter for
+**Hono on Bun's native HTTP server** — the runtime/framework comparison is the
+point of these two stacks.

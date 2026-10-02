@@ -47,8 +47,10 @@ pattern (root router + self-contained children).
 
 All eight stacks must implement the same API, same SQL, same pool rules. Isolated
 agents avoided cross-implementation interference while an explicit shared
-contract guaranteed parity. `node-express` + `bun-express` are byte-identical by design
-(the experiment's zero-rewrite runtime swap) and were written directly.
+contract guaranteed parity. `node-express` (Express 5) and `bun` (Hono on Bun's
+native HTTP server — no Express) share their hexagonal `domain/` + Postgres
+adapter byte-identical and were written directly; only the HTTP driving adapter
+differs.
 
 ## Agent ledger
 
@@ -58,7 +60,7 @@ contract guaranteed parity. `node-express` + `bun-express` are byte-identical by
 | `go-stdlib` | `main.go` (root) · `domain/` (models·errors·ports·workflows) · `adapters/` (postgres·http) · `infra/config` · `tests/` | ✅ `go build`/`go vet`/`go test` + live Traefik smoke 14/14 |
 | `java-spring` | `dev.bench` root (composition root) · `domain/{models,errors,ports,workflows}` · `adapters/{http,postgres}` · `infra/config` | ✅ `mvn package` (BUILD SUCCESS) + `mvn test` 7/7 |
 | `dotnet` | `Program.cs` (root) · `Domain/` · `Adapters/` (Http, PostgresFeedRepository) · `Infra/Config.cs` · `Tests/` (xunit, fake repo) | ✅ inline image builds (SDK 10) · ⚠️ local unit test run pending (no SDK on host) |
-| `bun-express` | identical to `node-express` (runtime swap only) | coverage via node-express |
+| `bun` | `main.ts` (root) · `domain/{models,errors,ports,workflows}.ts` · `adapters/{http(Hono),postgres}.ts` · `infra/config.ts` · `tests/` (bun:test + `app.request` HTTP tests) | ✅ `tsc --noEmit` + `bun test` 15/15 + live Bun serve smoke |
 | `node-express` | `main.ts` (root) · `domain/{models,errors,ports,workflows}.ts` · `adapters/{postgres,http}.ts` · `infra/config.ts` · `tests/` (strict TS, `tsc --noEmit` + `node --test`) | ✅ `tsc --noEmit` + `node --test` 7/7 + live Traefik smoke 14/14 |
 | `python-fastapi` | `main.py` (root) · `domain/` · `adapters/` · `infra/config` · `tests/` (3.14-slim) | ✅ `unittest` 6/6 + py_compile |
 | `php-laravel` | `app/Domain/{Models,Errors,Ports,Workflows}` · `app/Adapters/PostgresFeedRepository` · `app/Http/Controllers/ApiController` (driving) · `AppServiceProvider` (composition root) · FrankenPHP runtime | ✅ 13 PHP files `php -l` clean · ⚠️ inline image smoke pending |
@@ -97,8 +99,9 @@ contract guaranteed parity. `node-express` + `bun-express` are byte-identical by
     state shared across requests, no leader/instance-count assumptions. Docker
     Compose owns scaling (`--scale` / replicas); a service must behave
     correctly at any replica count with zero code changes.
-11. **TypeScript for the Express stacks — and strong types.** `node-express`
-    and `bun-express` are TypeScript (`.ts`, ESM) with **no emitted JS**
+11. **TypeScript for the Node/Bun stacks — and strong types.** `node-express`
+    (Express 5) and `bun` (Hono on Bun's native HTTP server — **no Express**)
+    are TypeScript (`.ts`, ESM) with **no emitted JS**
     anywhere: Node 24+ strips types natively and Bun runs `.ts` natively, so
     `tsc --noEmit` (strict) is a type-checker only (`just typecheck`; the
     `typescript` + `@types/*` devDependencies are not needed at runtime and the
@@ -124,7 +127,7 @@ contract guaranteed parity. `node-express` + `bun-express` are byte-identical by
 | java-spring | ✅ mvn | building (temurin 25) | pending |
 | python-fastapi | ✅ unittest | building (3.14-slim) | pending |
 | dotnet | ✅ image only | ✅ (SDK 10 → aspnet 10) | pending |
-| bun-express | ✅ (shared app) | building (bun:1-slim) | pending |
+| bun | ✅ `bun test` 15/15 + `tsc --noEmit` (Hono on Bun, no Express) | building (bun:1-slim) | pending |
 | php-laravel | ✅ php -l 13 files | building (frankenphp php8.4) | pending |
 
 ## Contract-parity decisions (Oct 2026 audit)

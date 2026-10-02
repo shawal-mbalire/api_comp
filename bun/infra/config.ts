@@ -9,7 +9,7 @@ export interface Config {
 }
 
 const DEFAULTS: Readonly<Config> = Object.freeze({
-  port: 3000,
+  port: 3001,
   connectionUri: 'postgres://app:app@db:5432/app',
   poolSize: 10,
 });
@@ -20,7 +20,9 @@ function numberFromEnv(raw: string | undefined, fallback: number): number {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 }
 
-export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
+export function loadConfig(
+  env: Readonly<Record<string, string | undefined>> = process.env,
+): Config {
   return Object.freeze({
     port: numberFromEnv(env.PORT, DEFAULTS.port),
     connectionUri: env.DATABASE_URL || DEFAULTS.connectionUri,

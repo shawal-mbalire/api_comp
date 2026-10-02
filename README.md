@@ -38,7 +38,7 @@ Arjay McCandless's *"I Tested 8 Programming Languages on a $12 Server"*
 ├── go-stdlib/
 ├── java-spring/
 ├── dotnet/
-├── bun-express/
+├── bun/
 ├── node-express/
 ├── python-fastapi/
 ├── php-laravel/

@@ -2,20 +2,19 @@
   "name": "backend-bun",
   "version": "1.0.0",
   "private": true,
-  "description": "Express 5 on the Bun runtime (TypeScript) — hexagonal benchmark feed API",
+  "description": "Hono on the Bun runtime (TypeScript) — hexagonal benchmark feed API",
   "type": "module",
   "scripts": {
     "start": "bun run main.ts",
-    "test": "node --test tests/",
+    "test": "bun test tests/",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "express": "^5.1.0",
+    "hono": "^4.13.0",
     "pg": "^8.13.1"
   },
   "devDependencies": {
-    "@types/express": "^5.0.0",
-    "@types/node": "^24.0.0",
+    "@types/bun": "^1.4.0",
     "@types/pg": "^8.11.0",
     "typescript": "^5.9.0"
   }

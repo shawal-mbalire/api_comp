@@ -1,14 +1,14 @@
 {
   "compilerOptions": {
-    "target": "es2023",
-    "lib": ["es2023"],
-    "module": "nodenext",
-    "moduleResolution": "nodenext",
-    "types": ["node"],
+    "target": "esnext",
+    "lib": ["ESNext"],
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "moduleDetection": "force",
+    "types": ["bun"],
 
-    // We run .ts directly (Node 24+ type stripping / Bun native TS) so there is
-    // no emit step — tsc is a type-checker only. Relative imports carry the
-    // explicit .ts extension (required by the runtimes).
+    // We run .ts directly (Bun native TS) so there is no emit step — tsc is a
+    // type-checker only. Relative imports carry the explicit .ts extension.
     "noEmit": true,
     "allowImportingTsExtensions": true,
     "erasableSyntaxOnly": true,
