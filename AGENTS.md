@@ -47,7 +47,7 @@ pattern (root router + self-contained children).
 
 All eight stacks must implement the same API, same SQL, same pool rules. Isolated
 agents avoided cross-implementation interference while an explicit shared
-contract guaranteed parity. `node-express` + `bun` are byte-identical by design
+contract guaranteed parity. `node-express` + `bun-express` are byte-identical by design
 (the experiment's zero-rewrite runtime swap) and were written directly.
 
 ## Agent ledger
@@ -58,7 +58,7 @@ contract guaranteed parity. `node-express` + `bun` are byte-identical by design
 | `go-stdlib` | `main.go` (root) · `domain/` (models·errors·ports·workflows) · `adapters/` (postgres·http) · `infra/config` · `tests/` | ✅ `go build`/`go vet`/`go test` + live Traefik smoke 14/14 |
 | `java-spring` | `dev.bench` root (composition root) · `domain/{models,errors,ports,workflows}` · `adapters/{http,postgres}` · `infra/config` | ✅ `mvn package` (BUILD SUCCESS) + `mvn test` 7/7 |
 | `dotnet` | `Program.cs` (root) · `Domain/` · `Adapters/` (Http, PostgresFeedRepository) · `Infra/Config.cs` · `Tests/` (xunit, fake repo) | ✅ inline image builds (SDK 10) · ⚠️ local unit test run pending (no SDK on host) |
-| `bun` | identical to `node-express` (runtime swap only) | coverage via node-express |
+| `bun-express` | identical to `node-express` (runtime swap only) | coverage via node-express |
 | `node-express` | `main.js` (root) · `domain/` · `adapters/{postgres,http}` · `infra/config` · `tests/` | ✅ `node --test` 7/7 + live Traefik smoke 14/14 |
 | `python-fastapi` | `main.py` (root) · `domain/` · `adapters/` · `infra/config` · `tests/` (3.14-slim) | ✅ `unittest` 6/6 + py_compile |
 | `php-laravel` | `app/Domain/{Models,Errors,Ports,Workflows}` · `app/Adapters/PostgresFeedRepository` · `app/Http/Controllers/ApiController` (driving) · `AppServiceProvider` (composition root) · FrankenPHP runtime | ✅ 13 PHP files `php -l` clean · ⚠️ inline image smoke pending |
@@ -108,7 +108,7 @@ contract guaranteed parity. `node-express` + `bun` are byte-identical by design
 | java-spring | ✅ mvn | building (temurin 25) | pending |
 | python-fastapi | ✅ unittest | building (3.14-slim) | pending |
 | dotnet | ✅ image only | ✅ (SDK 10 → aspnet 10) | pending |
-| bun | ✅ (shared app) | building (bun:1-slim) | pending |
+| bun-express | ✅ (shared app) | building (bun:1-slim) | pending |
 | php-laravel | ✅ php -l 13 files | building (frankenphp php8.4) | pending |
 
 ## Contract-parity decisions (Oct 2026 audit)

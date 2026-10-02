@@ -42,5 +42,5 @@ docker compose up -d --build
 curl -i -H "Authorization: Bearer 7" http://localhost/node/api/feed
 ```
 
-The exact same source runs unchanged on Bun (`../bun`) — the runtime swap is the
+The exact same source runs unchanged on Bun (`../bun-express`) — the runtime swap is the
 entire experiment for this stack.

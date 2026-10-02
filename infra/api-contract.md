@@ -118,7 +118,7 @@ per process and its own port inside the compose network.
 | Go (net/http)    | `go-stdlib`         | `/go`    | 8081 | pgx pool 10. |
 | Java (Spring 3)  | `java-spring`       | `/java`  | 8080 | MVC + Tomcat, JdbcTemplate, Hikari max 10. |
 | C# (ASP.NET Core)| `dotnet`            | `/dotnet`| 5000 | Minimal API, Npgsql pool 10. |
-| Bun (Express)    | `bun`               | `/bun`   | 3001 | Same Express app as Node, run by Bun. |
+| Bun (Express)    | `bun-express`        | `/bun`   | 3001 | Same Express app as Node, run by Bun. |
 | Node (Express 5) | `node-express`      | `/node`  | 3000 | Single process, pool 10. |
 | Python (FastAPI) | `python-fastapi`    | `/fastapi` | 8000 | Uvicorn 3 workers, pool 10 each. |
 | PHP (Laravel 13) | `php-laravel`       | `/php`   | 9000 | FrankenPHP classic mode, 10 threads (each keeps one persistent PDO connection), OPcache + route cache. |

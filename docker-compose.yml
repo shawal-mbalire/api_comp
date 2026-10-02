@@ -172,7 +172,7 @@ services:
 
   bun:
     build:
-      context: ./bun
+      context: ./bun-express
       dockerfile_inline: |
         FROM oven/bun:1-slim
         WORKDIR /app

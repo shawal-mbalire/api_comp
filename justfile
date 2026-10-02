@@ -76,7 +76,7 @@ test stack="all":
 
     all_stacks = {
         "node":    ("node-express",     ["node", "--test", "tests/"]),
-        "bun":     ("bun",              ["node", "--test", "tests/"]),
+        "bun":     ("bun-express",      ["node", "--test", "tests/"]),
         "go":      ("go-stdlib",        ["go", "test", "./..."]),
         "rust":    ("rust-axum",        ["cargo", "test"]),
         "java":    ("java-spring",      ["mvn", "-q", "test"]),
