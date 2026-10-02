@@ -2,13 +2,21 @@
   "name": "backend-node-express",
   "version": "1.0.0",
   "private": true,
-  "description": "Express 5 on Node 24 — hexagonal benchmark feed API",
+  "description": "Express 5 on Node 24 (TypeScript) — hexagonal benchmark feed API",
+  "type": "module",
   "scripts": {
-    "start": "node main.js",
-    "test": "node --test tests/"
+    "start": "node main.ts",
+    "test": "node --test tests/",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "express": "^5.1.0",
     "pg": "^8.13.1"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.0",
+    "@types/node": "^24.0.0",
+    "@types/pg": "^8.11.0",
+    "typescript": "^5.9.0"
   }
 }

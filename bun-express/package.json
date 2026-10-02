@@ -2,13 +2,21 @@
   "name": "backend-bun",
   "version": "1.0.0",
   "private": true,
-  "description": "Express 5 on the Bun runtime — hexagonal benchmark feed API",
+  "description": "Express 5 on the Bun runtime (TypeScript) — hexagonal benchmark feed API",
+  "type": "module",
   "scripts": {
-    "start": "bun run main.js",
-    "test": "node --test tests/"
+    "start": "bun run main.ts",
+    "test": "node --test tests/",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "express": "^5.1.0",
     "pg": "^8.13.1"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.0",
+    "@types/node": "^24.0.0",
+    "@types/pg": "^8.11.0",
+    "typescript": "^5.9.0"
   }
 }

@@ -68,6 +68,22 @@ metrics:
     @ls -la infra/metrics 2>/dev/null || echo "no metrics yet — run: just bench <stack>"
 
 # ── tests ────────────────────────────────────────────────────────────────────
+# Typecheck the TypeScript Express stacks (tsc --noEmit; no emit step — Node 24+
+# type-stripping and Bun run the .ts files natively).
+typecheck:
+    #!/usr/bin/env python3
+    import subprocess, sys
+
+    stacks = ["node-express", "bun-express"]
+    failed = 0
+    for stack in stacks:
+        r = subprocess.run(["npx", "tsc", "--noEmit"], cwd=stack)
+        ok = r.returncode == 0
+        print(f"{stack:16} {'ok' if ok else 'FAIL'}")
+        failed += 0 if ok else 1
+    print("typecheck: " + ("all stacks PASS" if failed == 0 else "FAILED"))
+    raise SystemExit(1 if failed else 0)
+
 # Unit tests per stack (fake repositories, no DB). `just test` → all stacks.
 test stack="all":
     #!/usr/bin/env python3

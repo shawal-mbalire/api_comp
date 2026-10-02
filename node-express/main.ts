@@ -1,15 +1,13 @@
-'use strict';
-
 // ─── Composition root ───────────────────────────────────────────────────────────
 // Reads config → creates adapter instances → wires them into the domain workflow
 // → starts the driving adapter (HTTP). No business logic here.
 
-const { loadConfig } = require('./infra/config');
-const { createPostgresFeedRepository } = require('./adapters/postgres');
-const { createFeedService } = require('./domain/workflows');
-const { createHttpApp } = require('./adapters/http');
+import { loadConfig } from './infra/config.ts';
+import { createPostgresFeedRepository } from './adapters/postgres.ts';
+import { createFeedService } from './domain/workflows.ts';
+import { createHttpApp } from './adapters/http.ts';
 
-async function main() {
+async function main(): Promise<void> {
   const config = loadConfig();
 
   // Driven adapter (Postgres) behind the FeedRepository port.
@@ -26,14 +24,16 @@ async function main() {
   });
 
   // LifetimePort: graceful exit — close the DB pool on SIGTERM/SIGINT.
-  const shutdown = () => {
-    server.close(() => repository.close().then(() => process.exit(0)));
+  const shutdown = (): void => {
+    server.close(() => {
+      void repository.close().then(() => process.exit(0));
+    });
   };
   process.on('SIGTERM', shutdown);
   process.on('SIGINT', shutdown);
 }
 
-main().catch((err) => {
+void main().catch((err: unknown) => {
   console.error(err);
   process.exit(1);
 });

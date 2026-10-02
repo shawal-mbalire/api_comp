@@ -1,24 +1,27 @@
-# Feed API — Express 5 on Node 24 (hexagonal)
+# Feed API — Express 5 on Node 24, TypeScript (hexagonal)
 
-Single-process benchmark backend implementing `../infra/api-contract.md`.
+Single-process benchmark backend implementing `../infra/api-contract.md`, written
+in **strongly-typed TypeScript** and run **without a build step**: Node 24+ strips
+types natively (`node main.ts`), so `tsc --noEmit` is purely a type-checker.
 
 ## Hexagonal layout
 
 ```
 node-express/
-├── main.js                 # composition root (wires adapters → workflows → HTTP)
-├── domain/                 # pure application logic — zero framework imports
-│   ├── models.js           # User, Post (pure data)
-│   ├── errors.js           # BadRequestError, NotFoundError
-│   ├── ports.js            # FeedRepository + Clock port contracts
-│   └── workflows.js        # FeedService — pure orchestrators (validate → drive repo)
+├── main.ts                  # composition root (wires adapters → workflows → HTTP)
+├── domain/                  # pure application logic — zero framework imports
+│   ├── models.ts            # User/Post interfaces + frozen factories
+│   ├── errors.ts            # BadRequestError, NotFoundError
+│   ├── ports.ts             # FeedRepository + Clock port interfaces
+│   └── workflows.ts         # FeedService — pure orchestrators (validate → drive repo)
 ├── adapters/
-│   ├── postgres.js         # driven adapter: FeedRepository (raw SQL from the contract)
-│   └── http.js             # driving adapter: Express routes, auth + DTO mapping
+│   ├── postgres.ts          # driven adapter: FeedRepository (raw SQL from the contract)
+│   └── http.ts              # driving adapter: Express routes, auth + DTO mapping
 ├── infra/
-│   └── config.js           # typed config from env (only place env vars are read)
+│   └── config.ts            # typed config from env (only place env vars are read)
 ├── tests/
-│   └── workflows.test.js   # unit tests with a fake repository
+│   └── workflows.test.ts    # unit tests with a fake repository
+├── tsconfig.json            # strict, noEmit — type-check only (runtimes strip types)
 └── (image built inline in docker-compose.yml)
 ```
 
@@ -29,8 +32,9 @@ means adding one adapter — the domain never changes.
 ## Run
 
 ```bash
-npm install
-npm test                          # unit tests (fake repo)
+npm install                  # prod + dev deps (typescript, @types/*)
+npm run typecheck            # tsc --noEmit
+npm test                     # unit tests (fake repo), node --test on .ts
 PORT=3000 DATABASE_URL=postgres://app:app@localhost:5432/app npm start
 ```
 
@@ -42,5 +46,6 @@ docker compose up -d --build
 curl -i -H "Authorization: Bearer 7" http://localhost/node/api/feed
 ```
 
-The exact same source runs unchanged on Bun (`../bun-express`) — the runtime swap is the
-entire experiment for this stack.
+The exact same source (`domain/`, `adapters/`, `infra/`, `main.ts`, `tests/`,
+`tsconfig.json`) runs byte-identical on Bun (`../bun-express`) — the runtime swap
+is the entire experiment for this stack.

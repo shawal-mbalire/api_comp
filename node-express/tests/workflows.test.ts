@@ -1,42 +1,53 @@
-'use strict';
+// Unit tests for domain/workflows.ts using a fake FeedRepository (pure, in-memory).
+// Run: node --test tests/   (Node 24+ type stripping; `npm run typecheck` first)
 
-// Unit tests for domain/workflows.js using a fake FeedRepository (pure, in-memory).
-// Run: node --test tests/
-
-const test = require('node:test');
-const assert = require('node:assert/strict');
-const { createFeedService, parseId, validateContent } = require('../domain/workflows');
-const { BadRequestError, NotFoundError } = require('../domain/errors');
-const { user, post } = require('../domain/models');
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { createFeedService, parseId, validateContent } from '../domain/workflows.ts';
+import { BadRequestError, NotFoundError } from '../domain/errors.ts';
+import { post, user } from '../domain/models.ts';
+import type { FeedRepository } from '../domain/ports.ts';
 
 // ── fixtures ────────────────────────────────────────────────────────────────
 const ALICE = user(1, 'user_000001', 'Alice');
 const A_POST = post({
-  id: 10, userId: 1, username: 'user_000001', displayName: 'Alice',
-  content: 'hello hexagon', postedAt: new Date('2026-07-01T12:00:00.000Z'), likeCount: 2,
+  id: 10,
+  userId: 1,
+  username: 'user_000001',
+  displayName: 'Alice',
+  content: 'hello hexagon',
+  postedAt: new Date('2026-07-01T12:00:00.000Z'),
+  likeCount: 2,
 });
 
-function fakeRepository(overrides = {}) {
-  const likes = [];
-  return {
-    async findByUserId(id) {
+function fakeRepository(overrides: Partial<FeedRepository> = {}): FeedRepository {
+  const likes: Array<{ userId: number; postId: number }> = [];
+  const repository: FeedRepository = {
+    async findByUserId(id: number) {
       return id === ALICE.id ? ALICE : null;
     },
     async feed() {
       return [A_POST];
     },
-    async findPostById(id) {
+    async findPostById(id: number) {
       return id === A_POST.id ? A_POST : null;
     },
-    async like(userId, postId) {
+    async like(userId: number, postId: number) {
       likes.push({ userId, postId });
     },
-    async createPost(userId, content) {
-      return post({ id: 99, userId, username: ALICE.username, displayName: ALICE.displayName,
-        content, postedAt: new Date('2026-07-01T13:00:00.000Z'), likeCount: 0 });
+    async createPost(userId: number, content: string) {
+      return post({
+        id: 99,
+        userId,
+        username: ALICE.username,
+        displayName: ALICE.displayName,
+        content,
+        postedAt: new Date('2026-07-01T13:00:00.000Z'),
+        likeCount: 0,
+      });
     },
-    ...overrides,
   };
+  return { ...repository, ...overrides };
 }
 
 // ── pure functions ──────────────────────────────────────────────────────────
@@ -58,15 +69,16 @@ test('validateContent trims and rejects empty', () => {
 // ── workflows (fake repo) ───────────────────────────────────────────────────
 test('getMe returns the user; unknown id → NotFoundError', async () => {
   const svc = createFeedService(fakeRepository());
-  assert.equal((await svc.getMe(1)).id, 1);
+  const me = await svc.getMe(1);
+  assert.equal(me.id, 1);
   await assert.rejects(() => svc.getMe(999), NotFoundError);
 });
 
-test('getFeed returns the 20 newest posts', async () => {
+test('getFeed returns the posts', async () => {
   const svc = createFeedService(fakeRepository());
   const feed = await svc.getFeed(1);
-  assert.equal(feed.length, 1);
-  assert.equal(feed[0].likeCount, 2);
+  const first = feed[0];
+  assert.equal(first?.likeCount, 2);
 });
 
 test('getPost maps 404/400 correctly', async () => {

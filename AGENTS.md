@@ -59,7 +59,7 @@ contract guaranteed parity. `node-express` + `bun-express` are byte-identical by
 | `java-spring` | `dev.bench` root (composition root) · `domain/{models,errors,ports,workflows}` · `adapters/{http,postgres}` · `infra/config` | ✅ `mvn package` (BUILD SUCCESS) + `mvn test` 7/7 |
 | `dotnet` | `Program.cs` (root) · `Domain/` · `Adapters/` (Http, PostgresFeedRepository) · `Infra/Config.cs` · `Tests/` (xunit, fake repo) | ✅ inline image builds (SDK 10) · ⚠️ local unit test run pending (no SDK on host) |
 | `bun-express` | identical to `node-express` (runtime swap only) | coverage via node-express |
-| `node-express` | `main.js` (root) · `domain/` · `adapters/{postgres,http}` · `infra/config` · `tests/` | ✅ `node --test` 7/7 + live Traefik smoke 14/14 |
+| `node-express` | `main.ts` (root) · `domain/{models,errors,ports,workflows}.ts` · `adapters/{postgres,http}.ts` · `infra/config.ts` · `tests/` (strict TS, `tsc --noEmit` + `node --test`) | ✅ `tsc --noEmit` + `node --test` 7/7 + live Traefik smoke 14/14 |
 | `python-fastapi` | `main.py` (root) · `domain/` · `adapters/` · `infra/config` · `tests/` (3.14-slim) | ✅ `unittest` 6/6 + py_compile |
 | `php-laravel` | `app/Domain/{Models,Errors,Ports,Workflows}` · `app/Adapters/PostgresFeedRepository` · `app/Http/Controllers/ApiController` (driving) · `AppServiceProvider` (composition root) · FrankenPHP runtime | ✅ 13 PHP files `php -l` clean · ⚠️ inline image smoke pending |
 
@@ -97,6 +97,22 @@ contract guaranteed parity. `node-express` + `bun-express` are byte-identical by
     state shared across requests, no leader/instance-count assumptions. Docker
     Compose owns scaling (`--scale` / replicas); a service must behave
     correctly at any replica count with zero code changes.
+11. **TypeScript for the Express stacks — and strong types.** `node-express`
+    and `bun-express` are TypeScript (`.ts`, ESM) with **no emitted JS**
+    anywhere: Node 24+ strips types natively and Bun runs `.ts` natively, so
+    `tsc --noEmit` (strict) is a type-checker only (`just typecheck`; the
+    `typescript` + `@types/*` devDependencies are not needed at runtime and the
+    images install with `--omit=dev`). Rules: `strict: true`,
+    `noUncheckedIndexedAccess`, explicit types on every function surface, no
+    `any`, `import type` for type-only imports, relative imports carry the
+    `.ts` extension, `erasableSyntaxOnly` (no enums/namespaces/parameter
+    properties). If a type doesn't fit, model it — don't escape to `any`.
+12. **No logic-overloaded statements — use variables.** Break dense inline
+    expressions (long ternaries, chained `??`/`&&`, compound boolean
+    conditions, deeply nested calls) into well-named local variables so each
+    statement reads like prose. If you have to pause to parse a line, extract
+    part of it into a variable (e.g. the acting user id, a FK-violation flag,
+    a DTO field). This applies to every language in the repo, not just TS.
 
 ## Verification matrix (Oct 2026 — mega `docker compose up -d --build` in progress)
 
