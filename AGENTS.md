@@ -8,10 +8,11 @@ of the 8 stacks was implemented by a dedicated subagent working from the
 **Hexagonal Architecture** (pure `domain/` + ports + `adapters/` + `infra/` +
 root composition root + `tests/`).
 
-Every stack subagent **prefers the `hexagonal-architecture` skill** — it is the
-canonical reference for the layer layout and structure rules — and **delivers a
-`justfile` per stack folder** per the `justfile` skill's nested-monorepo
-pattern (root router + self-contained children).
+The intro of every stack subagent prompt **loads the `hexagonal-architecture`
+skill** (canonical reference for the layer layout, port taxonomy, and structure
+rules) **and the `justfile` skill** (nested-monorepo justfiles), and the subagent
+**delivers a self-contained `justfile` per stack folder** (root router +
+self-contained children).
 
 ## Architecture (current)
 
@@ -52,6 +53,34 @@ native HTTP server — no Express) share their hexagonal `domain/` + Postgres
 adapter byte-identical and were written directly; only the HTTP driving adapter
 differs.
 
+## Port patterns: Repository vs Gateway
+
+Ports in this repo are named by the boundary they draw. Choose the name for an
+adapter family by **whose data or contract is on the other side of the port**:
+
+- **`*Repository` — the domain's own data.** The port abstracts **storage of
+  data the domain owns**: the rows/aggregates whose shape and lifecycle are
+  yours. Methods are named after domain concepts (`findByUserId`, `feed`,
+  `findPostById`, `like`, `createPost`), and the adapter owns the SQL plus the
+  row↔domain mapping. **Use a Repository when swapping the storage backend is
+  the reason for the port** (Postgres ↔ SQLite, same data, zero domain
+  changes). In this repo every stack's one port is a Repository —
+  `FeedRepository` → `PostgresFeedRepository`.
+- **`*Gateway` — a foreign system.** The port wraps an **external capability
+  the domain does not own**: a third-party REST/gRPC API, a message broker, a
+  payment or auth provider, another service's protocol. The adapter translates
+  that foreign request/response protocol into domain calls, and the
+  protocol/endpoints live in the adapter's injected config — **never in the
+  port signature**. **Use a Gateway when swapping the transport or vendor is
+  the reason for the port** (Stripe ↔ Adyen, HTTP ↔ gRPC, stub ↔ live API).
+
+> **Decision shortcut: whose contract is it?** "Ours — we're deciding how to
+> store it" → **Repository**. "Theirs — we're calling into their system" →
+> **Gateway**. (Applies to the `hexagonal-architecture` skill's port taxonomy:
+> persistence → `*Repository`, external APIs → `*Gateway`.) This repo has only
+> a Repository today; introduce a Gateway the moment a stack must reach outside
+> Postgres.
+
 ## Agent ledger
 
 | Stack | Hexagonal structure | Verification |
@@ -80,7 +109,9 @@ differs.
    Postgres owns persistence). Never override the compose network
    responsibilities inside a service.
 6. Hexagonal: domain never imports frameworks/DB; adapters implement ports;
-   `infra/config` is the only env reader; entry point = composition root.
+   `infra/config` is the only env reader; entry point = composition root. Name
+   each port by its boundary — `*Repository` when the domain owns the data,
+   `*Gateway` when it wraps a foreign system (see "Port patterns" above).
 7. **No shell scripts.** All tooling is Python (`infra/*.py`, inline shebangs in
    the justfiles) or the justfiles themselves.
 8. **Prefer the `hexagonal-architecture` skill.** Every stack agent loads the
@@ -89,12 +120,15 @@ differs.
    `tests/`), file placement, ports-only-when-they-earn-it, and workflows-read-
    like-pseudocode. This doc only summarizes repo specifics; the skill wins on
    any architectural detail.
-9. **One self-contained `justfile` per stack folder.** Each of the 8 stack
-   folders ships its own `justfile` following the `justfile` skill:
-   space-separated subcommands, silent `@`-prefixed one-liners, inline Python
-   shebang bodies for any logic, no external script files. The root `justfile`
-   is a thin router whose recipes `cd` into each folder — `just <stack> <recipe>`
-   — and children are fully self-contained (never `import` the root).
+9. **One self-contained `justfile` per stack folder — written with the
+   `justfile` skill.** Every stack agent loads the `justfile` skill before
+   writing its stack justfile (same discipline as rule 8 for hexagonal) and
+   follows its UX rules: space-separated subcommands (`just build`, `just
+   test`), silent `@`-prefixed one-liners for trivial recipes, inline
+   `#!/usr/bin/env python3` shebang bodies for any logic (no external script
+   files), children fully self-contained (never `import` the root). The root
+   `justfile` is a thin router whose recipes `cd` into each folder —
+   `just <stack> <recipe>` — per the skill's nested-monorepo pattern.
 10. **Stateless for Docker replicas.** Every API is stateless — no in-process
     state shared across requests, no leader/instance-count assumptions. Docker
     Compose owns scaling (`--scale` / replicas); a service must behave
