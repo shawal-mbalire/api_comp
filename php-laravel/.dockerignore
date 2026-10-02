@@ -1,0 +1,7 @@
+{
+    ".git": true,
+    "**/.DS_Store": true,
+    "*.log": true,
+    ".env": true,
+    "vendor": true
+}

@@ -1,0 +1,299 @@
+name: api-comp
+
+# ─── Architecture ─────────────────────────────────────────────────────────────
+# Traefik is the ONLY networking/routing component and its config IS this file
+# (the `command:` array + router labels below). Each stack is exposed by path
+# prefix (/rust, /go, /java, /dotnet, /bun, /node, /fastapi, /php); a
+# stripPrefix middleware removes the prefix so every backend serves the
+# IDENTICAL contract URIs (/health, /api/feed, /api/posts/...).
+# Postgres is a pure database. Every service runs ONE process doing ONE thing.
+# No Dockerfiles, no nginx, no config files — everything is inline below
+# (each stack's image is built from dockerfile_inline).
+#
+# ONE command brings up everything:
+#   docker compose up -d --build      (pulls latest base images, builds all 8)
+#
+# Smoke test a stack:   python3 infra/smoke-test.py --base-url http://localhost/node
+# Benchmark a stack:    python3 infra/benchmark.py --stack go
+
+services:
+  # ── edge proxy: owns all networking/routing (inline config) ───────────────
+  traefik:
+    image: traefik:latest
+    restart: unless-stopped
+    command:
+      - --providers.docker=true
+      - --providers.docker.exposedbydefault=false
+      - --entrypoints.web.address=:80
+      - --api.dashboard=true
+      - --api.insecure=true            # dashboard on :8080 (local benchmarking only)
+      - --certificatesresolvers.letsencrypt.acme.email=admin@example.com
+      - --certificatesresolvers.letsencrypt.acme.storage=/acme.json
+      - --certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web
+    ports:
+      - "80:80"
+      - "8080:8080"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./infra/acme.json:/acme.json
+    labels:
+      traefik.enable: "true"
+      traefik.http.routers.dashboard.rule: "Host(`traefik.localhost`)"
+      traefik.http.routers.dashboard.service: "api@internal"
+      traefik.http.routers.dashboard.entrypoints: "web"
+
+  # ── database: pure Postgres, nothing more — config inline in compose, ─────────
+#    ONE schema file (infra/schema.sql) auto-applied on fresh volumes.
+  db:
+    image: postgres:latest
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: app
+      POSTGRES_PASSWORD: app
+      POSTGRES_DB: app
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./infra/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U app -d app"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+  # ── API stacks: one process, one job each (images built inline) ───────────
+
+  rust:
+    build:
+      context: ./rust-axum
+      dockerfile_inline: |
+        FROM rust:slim
+        WORKDIR /build
+        COPY . .
+        RUN cargo build --release \
+            && cp target/release/backend-rust-axum /usr/local/bin/server
+        EXPOSE 8082
+        CMD ["/usr/local/bin/server"]
+    restart: unless-stopped
+    environment: { PORT: 8082, DATABASE_URL: postgres://app:app@db:5432/app, POOL_SIZE: "10" }
+    depends_on:
+      db:
+        condition: service_healthy
+    labels:
+      traefik.enable: "true"
+      traefik.http.routers.rust.rule: "PathPrefix(`/rust`)"
+      traefik.http.routers.rust.entrypoints: "web"
+      traefik.http.routers.rust.middlewares: "rust-strip"
+      traefik.http.middlewares.rust-strip.stripprefix.prefixes: "/rust"
+      traefik.http.services.rust.loadbalancer.server.port: "8082"
+
+  go:
+    build:
+      context: ./go-stdlib
+      dockerfile_inline: |
+        FROM golang:1.27
+        WORKDIR /app
+        COPY go.mod go.sum ./
+        RUN go mod download
+        COPY . .
+        RUN CGO_ENABLED=0 go build -o /usr/local/bin/server .
+        EXPOSE 8081
+        CMD ["/usr/local/bin/server"]
+    restart: unless-stopped
+    environment: { PORT: 8081, DATABASE_URL: postgres://app:app@db:5432/app, POOL_SIZE: "10" }
+    depends_on:
+      db:
+        condition: service_healthy
+    labels:
+      traefik.enable: "true"
+      traefik.http.routers.go.rule: "PathPrefix(`/go`)"
+      traefik.http.routers.go.entrypoints: "web"
+      traefik.http.routers.go.middlewares: "go-strip"
+      traefik.http.middlewares.go-strip.stripprefix.prefixes: "/go"
+      traefik.http.services.go.loadbalancer.server.port: "8081"
+
+  java:
+    build:
+      context: ./java-spring
+      dockerfile_inline: |
+        FROM maven:3.9-eclipse-temurin-25 AS builder
+        WORKDIR /app
+        COPY pom.xml .
+        COPY src ./src
+        RUN mvn -q -DskipTests package
+        FROM eclipse-temurin:25-jre
+        WORKDIR /app
+        COPY --from=builder /app/target/*.jar app.jar
+        ENV PORT=8080
+        EXPOSE 8080
+        ENTRYPOINT ["java", "-jar", "app.jar"]
+    restart: unless-stopped
+    environment: { PORT: 8080, DATABASE_URL: postgres://app:app@db:5432/app, POOL_SIZE: "10" }
+    depends_on:
+      db:
+        condition: service_healthy
+    labels:
+      traefik.enable: "true"
+      traefik.http.routers.java.rule: "PathPrefix(`/java`)"
+      traefik.http.routers.java.entrypoints: "web"
+      traefik.http.routers.java.middlewares: "java-strip"
+      traefik.http.middlewares.java-strip.stripprefix.prefixes: "/java"
+      traefik.http.services.java.loadbalancer.server.port: "8080"
+
+  dotnet:
+    build:
+      context: ./dotnet
+      dockerfile_inline: |
+        FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
+        WORKDIR /src
+        COPY apicomp.csproj .
+        RUN dotnet restore
+        COPY . .
+        RUN dotnet publish -c Release --no-restore -o /app/publish
+        FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS final
+        WORKDIR /app
+        ENV ASPNETCORE_URLS=http://+:5000
+        COPY --from=build /app/publish .
+        EXPOSE 5000
+        ENTRYPOINT ["dotnet", "apicomp.dll"]
+    restart: unless-stopped
+    environment: { PORT: 5000, DATABASE_URL: postgres://app:app@db:5432/app, POOL_SIZE: "10" }
+    depends_on:
+      db:
+        condition: service_healthy
+    labels:
+      traefik.enable: "true"
+      traefik.http.routers.dotnet.rule: "PathPrefix(`/dotnet`)"
+      traefik.http.routers.dotnet.entrypoints: "web"
+      traefik.http.routers.dotnet.middlewares: "dotnet-strip"
+      traefik.http.middlewares.dotnet-strip.stripprefix.prefixes: "/dotnet"
+      traefik.http.services.dotnet.loadbalancer.server.port: "5000"
+
+  bun:
+    build:
+      context: ./bun
+      dockerfile_inline: |
+        FROM oven/bun:1-slim
+        WORKDIR /app
+        COPY package*.json ./
+        RUN bun install --omit=dev
+        COPY . .
+        EXPOSE 3001
+        CMD ["bun", "run", "main.js"]
+    restart: unless-stopped
+    environment: { PORT: 3001, DATABASE_URL: postgres://app:app@db:5432/app, POOL_SIZE: "10" }
+    depends_on:
+      db:
+        condition: service_healthy
+    labels:
+      traefik.enable: "true"
+      traefik.http.routers.bun.rule: "PathPrefix(`/bun`)"
+      traefik.http.routers.bun.entrypoints: "web"
+      traefik.http.routers.bun.middlewares: "bun-strip"
+      traefik.http.middlewares.bun-strip.stripprefix.prefixes: "/bun"
+      traefik.http.services.bun.loadbalancer.server.port: "3001"
+
+  node:
+    build:
+      context: ./node-express
+      dockerfile_inline: |
+        FROM node:24-slim
+        WORKDIR /app
+        COPY package*.json ./
+        RUN npm install --omit=dev
+        COPY . .
+        EXPOSE 3000
+        CMD ["node", "main.js"]
+    restart: unless-stopped
+    environment: { PORT: 3000, DATABASE_URL: postgres://app:app@db:5432/app, POOL_SIZE: "10" }
+    depends_on:
+      db:
+        condition: service_healthy
+    labels:
+      traefik.enable: "true"
+      traefik.http.routers.node.rule: "PathPrefix(`/node`)"
+      traefik.http.routers.node.entrypoints: "web"
+      traefik.http.routers.node.middlewares: "node-strip"
+      traefik.http.middlewares.node-strip.stripprefix.prefixes: "/node"
+      traefik.http.services.node.loadbalancer.server.port: "3000"
+
+  fastapi:
+    build:
+      context: ./python-fastapi
+      dockerfile_inline: |
+        FROM python:3.14-slim
+        WORKDIR /app
+        COPY requirements.txt .
+        RUN pip install --no-cache-dir -r requirements.txt
+        COPY . .
+        EXPOSE 8000
+        CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "3"]
+    restart: unless-stopped
+    environment: { PORT: 8000, DATABASE_URL: postgres://app:app@db:5432/app, POOL_SIZE: "10" }
+    depends_on:
+      db:
+        condition: service_healthy
+    labels:
+      traefik.enable: "true"
+      traefik.http.routers.fastapi.rule: "PathPrefix(`/fastapi`)"
+      traefik.http.routers.fastapi.entrypoints: "web"
+      traefik.http.routers.fastapi.middlewares: "fastapi-strip"
+      traefik.http.middlewares.fastapi-strip.stripprefix.prefixes: "/fastapi"
+      traefik.http.services.fastapi.loadbalancer.server.port: "8000"
+
+  php:
+    build:
+      context: ./php-laravel
+      dockerfile_inline: |
+        FROM composer:latest AS build
+        ENV COMPOSER_ALLOW_SUPERUSER=1 APP_ENV=production APP_DEBUG=false \
+            APP_KEY=base64:MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=
+        WORKDIR /tmp
+        RUN composer create-project laravel/laravel:^13.0 /app \
+                --no-install --no-scripts --no-interaction --prefer-dist --no-progress
+        COPY composer.json /app/composer.json
+        COPY bootstrap/app.php /app/bootstrap/app.php
+        COPY routes/ /app/routes/
+        COPY app/ /app/app/
+        WORKDIR /app
+        RUN composer install --no-dev --no-interaction --prefer-dist --optimize-autoloader --no-progress \
+            && php artisan route:cache
+        FROM dunglas/frankenphp:php8.4
+        RUN set -eux; \
+            apt-get update; \
+            apt-get install -y --no-install-recommends libpq-dev; \
+            docker-php-ext-install -j"$(nproc)" pdo_pgsql; \
+            docker-php-ext-enable opcache; \
+            apt-get remove -y --purge libpq-dev; \
+            apt-get autoremove -y; \
+            rm -rf /var/lib/apt/lists/*
+        ENV PORT=9000 POOL_SIZE=10 DATABASE_URL=postgres://app:app@db:5432/app \
+            APP_ENV=production APP_DEBUG=false \
+            APP_KEY=base64:MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY= \
+            SESSION_DRIVER=cookie CACHE_STORE=array QUEUE_CONNECTION=sync LOG_CHANNEL=stderr
+        WORKDIR /app
+        COPY --from=build /app /app
+        RUN mkdir -p /etc/caddy \
+            && printf '%s\n' '{' '  auto_https off' '  admin off' '}' \
+                 ':9000 {' '  root * /app/public' '  encode zstd gzip' '  php_server' '  header -Server' '}' \
+                 > /etc/caddy/Caddyfile \
+            && printf '%s\n' 'memory_limit = 256M' 'date.timezone = UTC' 'expose_php = Off' \
+                 'opcache.enable = 1' 'opcache.validate_timestamps = 0' 'opcache.memory_consumption = 128' \
+                 'opcache.max_accelerated_files = 20000' 'opcache.jit = tracing' 'opcache.jit_buffer_size = 64M' \
+                 > /usr/local/etc/php/conf.d/zz-frankenphp.ini
+        EXPOSE 9000
+        ENTRYPOINT ["frankenphp", "run", "--config", "/etc/caddy/Caddyfile"]
+    restart: unless-stopped
+    environment: { PORT: 9000, DATABASE_URL: postgres://app:app@db:5432/app, POOL_SIZE: "10" }
+    depends_on:
+      db:
+        condition: service_healthy
+    labels:
+      traefik.enable: "true"
+      traefik.http.routers.php.rule: "PathPrefix(`/php`)"
+      traefik.http.routers.php.entrypoints: "web"
+      traefik.http.routers.php.middlewares: "php-strip"
+      traefik.http.middlewares.php-strip.stripprefix.prefixes: "/php"
+      traefik.http.services.php.loadbalancer.server.port: "9000"
+
+volumes:
+  pgdata:

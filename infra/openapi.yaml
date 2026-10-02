@@ -1,0 +1,193 @@
+openapi: 3.0.3
+info:
+  title: Benchmark Feed API
+  description: >
+    Twitter-style REST API used for the multi-language backend benchmark.
+    Every language/framework in this repository implements this exact contract.
+    See api-contract.md for the authoritative behavior spec.
+  version: 1.0.0
+servers:
+  - url: http://localhost
+    description: "Traefik edge — append the stack prefix: /rust, /go, /java, /dotnet, /bun, /node, /fastapi, /php (stripped by Traefik before the backend)"
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: >
+        Benchmark simplification: the bearer token IS the acting user id
+        (e.g. `Authorization: Bearer 7`).
+
+  schemas:
+    User:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+          example: 7
+        username:
+          type: string
+          example: user_000007
+        displayName:
+          type: string
+          example: Ada Lovelace
+    Post:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+          example: 123456
+        userId:
+          type: integer
+          format: int64
+        username:
+          type: string
+        displayName:
+          type: string
+        content:
+          type: string
+        postedAt:
+          type: string
+          format: date-time
+        likeCount:
+          type: integer
+          format: int64
+          example: 42
+    NewPost:
+      type: object
+      required:
+        - content
+      properties:
+        content:
+          type: string
+          minLength: 1
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+          example: not found
+
+security:
+  - bearerAuth: []
+
+paths:
+  /health:
+    get:
+      operationId: getHealth
+      security: []
+      responses:
+        '200':
+          description: Service is up
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+
+  /api/me:
+    get:
+      operationId: getMe
+      responses:
+        '200':
+          description: Current user
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/feed:
+    get:
+      operationId: getFeed
+      responses:
+        '200':
+          description: 20 newest posts with authors and like counts
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Post'
+
+  /api/posts/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+    get:
+      operationId: getPost
+      responses:
+        '200':
+          description: A single post
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Post'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/posts/{id}/like:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+    post:
+      operationId: likePost
+      responses:
+        '204':
+          description: Post liked (idempotent)
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/posts:
+    post:
+      operationId: createPost
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NewPost'
+      responses:
+        '201':
+          description: Post created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Post'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+responses:
+  Unauthorized:
+    description: Missing or malformed bearer token
+    content:
+      application/json:
+        schema:
+          $ref: '#/components/schemas/Error'
+  NotFound:
+    description: Resource not found
+    content:
+      application/json:
+        schema:
+          $ref: '#/components/schemas/Error'
+  BadRequest:
+    description: Invalid request body
+    content:
+      application/json:
+        schema:
+          $ref: '#/components/schemas/Error'

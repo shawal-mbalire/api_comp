@@ -1,0 +1,18 @@
+[package]
+name = "backend-rust-axum"
+version = "0.1.0"
+edition = "2021"
+description = "Rust (Axum + SQLx) backend for the multi-language benchmark feed API"
+license = "MIT"
+
+[dependencies]
+axum = "0.8"
+tokio = { version = "1", features = ["macros", "net", "rt-multi-thread", "signal"] }
+sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio", "postgres", "chrono", "tls-none"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+chrono = "0.4"
+async-trait = "0.1"
+
+[dev-dependencies]
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }

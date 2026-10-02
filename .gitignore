@@ -1,0 +1,33 @@
+# ---- runtime artifacts ----
+node_modules/
+__pycache__/
+*.pyc
+target/
+*.class
+bin/
+obj/
+vendor/
+var/
+bootstrap/cache/*
+!bootstrap/cache/.gitignore
+storage/framework/cache/*
+!storage/framework/cache/.gitignore
+storage/framework/sessions/*
+!storage/framework/sessions/.gitignore
+storage/framework/views/*
+!storage/framework/views/.gitignore
+.env
+.env.*
+!.env.example
+
+# ---- benchmark data (large, regenerated) ----
+data/
+
+# ---- k6 output ----
+*.summary.json
+metrics/
+
+# ---- misc ----
+.DS_Store
+*.log
+acme.json

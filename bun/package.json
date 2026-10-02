@@ -1,0 +1,14 @@
+{
+  "name": "backend-node-express",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Express 5 on Node 22 — hexagonal benchmark feed API",
+  "scripts": {
+    "start": "bun run main.js",
+    "test": "node --test tests/"
+  },
+  "dependencies": {
+    "express": "^5.1.0",
+    "pg": "^8.13.1"
+  }
+}
